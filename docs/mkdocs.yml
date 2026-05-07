@@ -1,0 +1,81 @@
+site_name: FedAgent-Chain Documentation
+site_description: Secure Federated and Agentic AI for Disability-Inclusive Employment
+site_url: https://fedagent-chain.github.io/fedagent-chain
+repo_url: https://github.com/fedagent-chain/fedagent-chain
+repo_name: fedagent-chain/fedagent-chain
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            docstring_style: numpy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+  - pymdownx.arithmatex:
+      generic: true
+  - admonition
+  - tables
+  - footnotes
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Federated Learning: federated_learning.md
+  - Blockchain Layer: blockchain.md
+  - Agentic AI Services: agents.md
+  - Fairness Methodology: fairness.md
+  - Privacy Mechanisms: privacy.md
+  - Synthetic Data: synthetic_data.md
+  - Evaluation: evaluation.md
+  - Deployment: deployment.md
+  - Ethics: ethics.md
+  - API Reference:
+      - Federated: api_reference/federated.md
+      - Agents: api_reference/agents.md
+      - Blockchain: api_reference/blockchain.md
+      - Evaluation: api_reference/evaluation.md
+      - Data: api_reference/data.md
+      - Utils: api_reference/utils.md

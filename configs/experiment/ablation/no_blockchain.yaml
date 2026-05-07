@@ -1,0 +1,12 @@
+# Ablation: System without blockchain audit layer
+# Measures contribution of blockchain to auditability and trust
+
+defaults:
+  - /experiment/fedagent_chain_full
+
+experiment:
+  name: ablation_no_blockchain
+  description: "Ablation study — full FL with fairness but no blockchain logging"
+
+blockchain:
+  enabled: false

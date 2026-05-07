@@ -1,0 +1,34 @@
+# Centralized Training Baseline — all data pooled at one node
+# Paper Table 2: "Centralized" column
+# NOTE: This baseline violates data sovereignty; included for comparison only.
+
+defaults:
+  - /default
+
+experiment:
+  name: baseline_centralized
+  description: "Centralized baseline — all node data pooled (data sovereignty violation)"
+  variant: baseline_centralized
+  note: "This setting is a theoretical upper bound; NOT compliant with privacy requirements."
+
+seed: 42
+
+federated:
+  n_rounds: 1
+  local_epochs: 50
+  min_clients: 1
+
+privacy:
+  enabled: false
+
+fairness:
+  enabled: false
+
+blockchain:
+  enabled: false
+
+data:
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500
+  centralized: true         # Merge all nodes into single training set

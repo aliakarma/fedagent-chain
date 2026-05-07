@@ -1,0 +1,13 @@
+# Ablation: FL without fairness optimization
+# Paper Table 3: Standard FL vs Fairness-Aware FL comparison
+
+defaults:
+  - /experiment/fedagent_chain_full
+
+experiment:
+  name: ablation_no_fairness
+  description: "Ablation study — standard FedAvg without fairness regularization"
+
+fairness:
+  enabled: false
+  lambda_fairness: 0.0

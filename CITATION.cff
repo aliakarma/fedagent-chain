@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "FedAgent-Chain: Secure Federated and Agentic AI for Multilingual Disability-Inclusive Employment"
+version: 1.0.0
+doi: 10.5281/zenodo.XXXXXXX
+date-released: 2025-01-01
+url: "https://github.com/fedagent-chain/fedagent-chain"
+repository-code: "https://github.com/fedagent-chain/fedagent-chain"
+license: Apache-2.0
+abstract: >
+  FedAgent-Chain is a secure federated and agentic AI framework for
+  multilingual, disability-inclusive employment intelligence in AI-driven
+  smart cities. It unifies federated learning, permissioned blockchain
+  auditability, agentic AI coordination, multilingual NLP, and
+  human-in-the-loop governance.
+authors:
+  - family-names: Syed
+    given-names: Toqeer Ali
+    orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"
+    affiliation: "Institution Name"
+    email: t.syed@institution.edu
+  - family-names: Siddiqui
+    given-names: Muhammad Shoaib
+    orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"
+    affiliation: "Institution Name"
+keywords:
+  - federated learning
+  - agentic AI
+  - blockchain
+  - disability inclusion
+  - employment matching
+  - multilingual NLP
+  - privacy-preserving AI
+  - fairness
+  - smart cities
+references:
+  - type: article
+    title: >
+      FedAgent-Chain: A Secure Federated and Agentic AI Framework for
+      Multilingual Disability-Inclusive Employment in AI Cities
+    authors:
+      - family-names: Syed
+        given-names: Toqeer Ali
+      - family-names: Siddiqui
+        given-names: Muhammad Shoaib
+    journal: "Frontiers in Artificial Intelligence"
+    year: 2025
+    doi: 10.xxxx/xxxxx

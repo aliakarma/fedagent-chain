@@ -1,0 +1,13 @@
+# Ablation: System without human-in-the-loop governance agent
+# Measures contribution of governance to safety and oversight
+
+defaults:
+  - /experiment/fedagent_chain_full
+
+experiment:
+  name: ablation_no_governance
+  description: "Ablation — full system without human-in-the-loop governance agent"
+
+agents:
+  governance:
+    review_threshold: 1.01   # Effectively disable governance by setting threshold > 1.0

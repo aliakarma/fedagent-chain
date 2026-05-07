@@ -1,0 +1,30 @@
+# FedAgent-Chain GPU-enabled Research Container
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
+
+LABEL description="FedAgent-Chain GPU Container"
+LABEL version="1.0.0"
+
+WORKDIR /fedagent-chain
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl build-essential libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt pyproject.toml ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+COPY src/ ./src/
+COPY configs/ ./configs/
+COPY scripts/ ./scripts/
+COPY nodes/ ./nodes/
+
+RUN mkdir -p data/processed experiments/runs experiments/results blockchain_storage logs
+RUN pip install --no-cache-dir -e . --no-deps
+
+ENV PYTHONPATH="/fedagent-chain:${PYTHONPATH}"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONHASHSEED=42
+ENV CUDA_VISIBLE_DEVICES=0
+
+CMD ["python", "-c", "import torch; print(f'GPU ready: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"No GPU\"}')"]

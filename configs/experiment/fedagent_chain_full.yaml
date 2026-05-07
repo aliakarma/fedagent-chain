@@ -1,0 +1,44 @@
+# FedAgent-Chain Full Framework Experiment Configuration
+# Reproduces Tables 2-7 and Figures 3-5 from the paper.
+# Run: python scripts/run_federated_simulation.py --config configs/experiment/fedagent_chain_full.yaml --seed 42
+
+defaults:
+  - /default
+
+# Experiment identity
+experiment:
+  name: fedagent_chain_full
+  description: "Full FedAgent-Chain framework with fairness-aware FL and blockchain"
+  variant: fedagent_chain
+
+seed: 42
+
+federated:
+  n_rounds: 20              # T — total federated rounds (paper: T=20)
+  min_clients: 4
+  local_epochs: 5           # E — local training epochs per round
+  batch_size: 64
+  learning_rate: 0.001
+
+privacy:
+  enabled: true
+  clipping_threshold: 1.0
+  noise_multiplier: 0.1
+
+fairness:
+  enabled: true
+  lambda_fairness: 0.1
+  protected_groups:
+    - disability_category
+    - language_primary
+    - preferred_work_mode
+    - node_id
+
+blockchain:
+  enabled: true
+  records_per_block: 10
+
+data:
+  n_users_per_node: 2500    # Total: 10,000 users
+  n_jobs_per_node: 1250     # Total: 5,000 jobs
+  n_pairs_per_node: 12500   # Total: 50,000 suitability pairs

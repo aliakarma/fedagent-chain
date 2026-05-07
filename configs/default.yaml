@@ -1,0 +1,81 @@
+# FedAgent-Chain Default Configuration
+# All experiment configs inherit from this base.
+# Override any field from the CLI or experiment-specific YAML files.
+
+# Reproducibility
+seed: 42
+
+# Federated Learning
+federated:
+  n_rounds: 20
+  min_clients: 4
+  local_epochs: 5
+  batch_size: 64
+  learning_rate: 0.001
+
+# Model Architecture
+model:
+  input_dim: 91          # 50 (skills) + 20 (accom) + 8 (disability) + 3 (mode) + 5 (edu) + 4 (goal) + 1 (lang)
+  hidden_dims: [256, 128, 64]
+  dropout_rate: 0.3
+
+# Differential Privacy
+privacy:
+  enabled: true
+  clipping_threshold: 1.0    # C — L2 norm clipping threshold
+  noise_multiplier: 0.1      # σ — Gaussian noise multiplier
+
+# Fairness Optimization
+fairness:
+  enabled: true
+  lambda_fairness: 0.1       # λ — fairness regularization weight
+  protected_groups:
+    - disability_category
+    - language_primary
+    - preferred_work_mode
+    - node_id
+
+# Blockchain
+blockchain:
+  enabled: true
+  records_per_block: 10
+  storage_path: null         # null = in-memory only
+
+# Agent Configuration
+agents:
+  employment:
+    alpha: 0.40              # Skill similarity weight
+    beta: 0.25               # Accommodation compatibility weight
+    gamma: 0.20              # Language match weight
+    delta: 0.15              # Work preference alignment weight
+    top_k: 10
+  governance:
+    review_threshold: 0.70   # τ — risk score threshold for human review escalation
+
+# Data
+data:
+  nodes: [saudi_arabia, united_states, china, europe]
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500
+  consent_filter: true       # Exclude records without consent_given=True
+  synthetic_data_path: data/synthetic
+
+# Evaluation
+evaluation:
+  k_values: [5, 10]
+  compute_fairness: true
+  compute_blockchain_audit: true
+
+# Experiment Tracking
+tracking:
+  use_mlflow: true
+  mlflow_tracking_uri: http://localhost:5000
+  use_wandb: false
+  wandb_project: fedagent-chain
+
+# Output Paths
+output:
+  base_dir: experiments/runs
+  save_checkpoints: true
+  checkpoint_interval: 5     # Save every N rounds

@@ -1,0 +1,33 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docker-build:
+    name: Docker Build & Validate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build main container
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          tags: fedagent-chain:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify container imports
+        run: docker run --rm fedagent-chain:test python -c "import src; print('Import OK')"
+
+      - name: Validate docker-compose config
+        run: docker compose -f docker/docker-compose.yml config --quiet

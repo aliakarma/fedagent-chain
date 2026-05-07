@@ -1,0 +1,39 @@
+# Evaluation Metrics Configuration
+
+metrics:
+  classification:
+    - accuracy
+    - precision
+    - recall
+    - f1
+
+  ranking:
+    k_values: [5, 10]
+    compute_precision_at_k: true
+    compute_recall_at_k: true
+
+  fairness:
+    protected_attributes:
+      - disability_category
+      - language_primary
+      - preferred_work_mode
+      - node_id
+    compute_disparity: true
+    disparity_metric: f1
+
+  blockchain:
+    compute_hash_completeness: true
+    compute_consent_validation_rate: true
+    compute_transaction_latency: true
+
+  overhead:
+    compute_round_duration: true
+    compute_communication_cost: true
+    compute_memory_usage: true
+
+output:
+  save_csv: true
+  save_json: true
+  generate_figures: true
+  results_dir: experiments/results
+  figures_dir: experiments/figures

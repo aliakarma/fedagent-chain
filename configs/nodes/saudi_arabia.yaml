@@ -1,0 +1,31 @@
+# Saudi Arabia Institutional Node Configuration
+
+node_id: saudi_arabia
+display_name: "Saudi Arabia Node"
+country: Saudi Arabia
+region: Middle East
+
+# Data characteristics for this node
+data:
+  primary_language: ar
+  secondary_languages: [en, ur]
+  dominant_disability_categories: [mobility, vision, chronic_health]
+  n_users: 2500
+  n_jobs: 1250
+  n_pairs: 12500
+  node_seed_offset: 0           # seed + 0 for Saudi Arabia node
+
+# Local training parameters (override defaults if needed)
+federated:
+  local_epochs: 5
+  batch_size: 64
+  learning_rate: 0.001
+
+# Privacy
+privacy:
+  clipping_threshold: 1.0
+  noise_multiplier: 0.1
+
+# Governance policy reference
+policy_ref: policy_saudi_arabia_pdpl    # Personal Data Protection Law (PDPL)
+consent_ref: consent_saudi_arabia_v1

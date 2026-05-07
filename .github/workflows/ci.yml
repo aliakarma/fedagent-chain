@@ -1,0 +1,198 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONHASHSEED: "42"
+
+jobs:
+  # ── Lint & Format ─────────────────────────────────────────────────────────
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install lint tools
+        run: pip install ruff black isort mypy
+
+      - name: Ruff lint
+        run: ruff check src/ tests/ scripts/
+
+      - name: Black format check
+        run: black --check src/ tests/ scripts/
+
+      - name: isort check
+        run: isort --check src/ tests/ scripts/
+
+      - name: mypy type check
+        run: mypy src/ --ignore-missing-imports
+
+  # ── Unit Tests ────────────────────────────────────────────────────────────
+  test-unit:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-22.04
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -e .
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term-missing -m "not integration and not regression"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.10'
+        with:
+          file: coverage.xml
+          flags: unit
+          fail_ci_if_error: false
+
+  # ── Integration Tests ─────────────────────────────────────────────────────
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-22.04
+    needs: test-unit
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -e .
+
+      - name: Run integration tests
+        run: pytest tests/integration/ -v -m integration --timeout=120
+
+  # ── Regression Tests ──────────────────────────────────────────────────────
+  test-regression:
+    name: Regression Tests (Paper Results)
+    runs-on: ubuntu-22.04
+    needs: test-integration
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -e .
+
+      - name: Generate synthetic data
+        run: |
+          python scripts/generate_synthetic_data.py \
+            --config configs/experiment/fedagent_chain_full.yaml \
+            --seed 42 \
+            --n-users-per-node 200 \
+            --n-jobs-per-node 100 \
+            --n-pairs-per-node 400
+
+      - name: Run evaluation (generates result CSVs)
+        run: python scripts/run_evaluation.py --results-dir experiments/results/
+
+      - name: Run regression tests
+        run: pytest tests/regression/ -v -m regression --timeout=300
+
+  # ── Security Scan ─────────────────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install security tools
+        run: pip install bandit safety
+
+      - name: Bandit SAST scan
+        run: bandit -r src/ -ll --skip B101
+
+      - name: Safety dependency scan
+        run: safety check -r requirements.txt --ignore 70612
+        continue-on-error: true   # Non-blocking; report only
+
+  # ── Smoke Test (full CLI) ─────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test (Full CLI)
+    runs-on: ubuntu-22.04
+    needs: test-unit
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -e .
+
+      - name: Smoke — generate data
+        run: |
+          python scripts/generate_synthetic_data.py \
+            --config configs/experiment/fedagent_chain_full.yaml \
+            --seed 42 \
+            --n-users-per-node 100 \
+            --n-jobs-per-node 50 \
+            --n-pairs-per-node 200
+
+      - name: Smoke — run simulation (2 rounds)
+        run: |
+          python scripts/run_federated_simulation.py \
+            --config configs/experiment/fedagent_chain_full.yaml \
+            --seed 42 \
+            --no-mlflow \
+            --override federated.n_rounds=2 federated.local_epochs=1
+
+      - name: Smoke — generate figures
+        run: python scripts/generate_figures.py
+
+      - name: Smoke — run evaluation
+        run: python scripts/run_evaluation.py

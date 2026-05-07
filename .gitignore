@@ -1,0 +1,97 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb~
+
+# Data (never commit real data)
+data/synthetic/*.csv
+data/synthetic/*.parquet
+data/synthetic/*.json
+data/processed/
+data/raw/
+
+# Experiment outputs
+experiments/runs/
+outputs/
+multirun/
+mlruns/
+mlartifacts/
+
+# Model checkpoints
+*.pt
+*.pth
+*.pkl
+*.h5
+*.safetensors
+checkpoints/
+
+# Environment variables (NEVER commit secrets)
+.env
+*.env.local
+.env.production
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker volumes
+docker/volumes/
+
+# DVC
+/data/.dvc/tmp
+*.dvc.lock
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Type checking
+.mypy_cache/
+
+# Linting
+.ruff_cache/
+
+# Logs
+logs/
+*.log
+
+# Wandb
+wandb/
+
+# Blockchain storage
+blockchain_storage/
+
+# Hydra outputs
+.hydra/
+
+# Distribution
+*.tar.gz
+*.zip

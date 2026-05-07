@@ -1,0 +1,31 @@
+# Local Training Baseline — trains one model per node with no federation
+# Paper Table 2: "Local" column
+
+defaults:
+  - /default
+
+experiment:
+  name: baseline_local
+  description: "Local-only training baseline — no federated aggregation"
+  variant: baseline_local
+
+seed: 42
+
+federated:
+  n_rounds: 1               # Only one round (no aggregation)
+  local_epochs: 100         # More epochs to compensate for no federation
+  min_clients: 1
+
+privacy:
+  enabled: false            # No privacy mechanism in local baseline
+
+fairness:
+  enabled: false            # No fairness optimization
+
+blockchain:
+  enabled: false            # No blockchain logging
+
+data:
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500

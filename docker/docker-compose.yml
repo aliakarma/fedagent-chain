@@ -1,0 +1,162 @@
+version: "3.9"
+
+# FedAgent-Chain Multi-Node Federated Simulation
+# Runs all four regional nodes + aggregator + blockchain + MLflow + dashboard
+#
+# Usage:
+#   docker-compose -f docker/docker-compose.yml up --build
+#   docker-compose -f docker/docker-compose.yml down -v
+
+x-common-env: &common-env
+  PYTHONPATH: /fedagent-chain
+  PYTHONHASHSEED: "42"
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+
+x-common-volumes: &common-volumes
+  - ./src:/fedagent-chain/src:ro
+  - ./configs:/fedagent-chain/configs:ro
+  - ./experiments:/fedagent-chain/experiments
+
+services:
+  # ── Federated Learning Aggregator ─────────────────────────────────────────
+  fl-aggregator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: fedagent-aggregator
+    command: >
+      python scripts/run_federated_simulation.py
+      --config configs/experiment/fedagent_chain_full.yaml
+      --seed 42
+      --no-mlflow
+    volumes:
+      <<: *common-volumes
+      - ./data:/fedagent-chain/data:ro
+      - blockchain-data:/fedagent-chain/blockchain_storage
+    networks:
+      - fedagent-net
+    environment:
+      <<: *common-env
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    restart: on-failure:3
+
+  # ── Saudi Arabia Node ──────────────────────────────────────────────────────
+  node-saudi-arabia:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: fedagent-node-sa
+    volumes:
+      <<: *common-volumes
+      - ./data/synthetic/saudi_arabia:/fedagent-chain/data/synthetic/saudi_arabia:ro
+    networks:
+      - fedagent-net
+    environment:
+      <<: *common-env
+      NODE_ID: saudi_arabia
+    depends_on:
+      - fl-aggregator
+
+  # ── United States Node ────────────────────────────────────────────────────
+  node-united-states:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: fedagent-node-us
+    volumes:
+      <<: *common-volumes
+      - ./data/synthetic/united_states:/fedagent-chain/data/synthetic/united_states:ro
+    networks:
+      - fedagent-net
+    environment:
+      <<: *common-env
+      NODE_ID: united_states
+    depends_on:
+      - fl-aggregator
+
+  # ── China Node ────────────────────────────────────────────────────────────
+  node-china:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: fedagent-node-cn
+    volumes:
+      <<: *common-volumes
+      - ./data/synthetic/china:/fedagent-chain/data/synthetic/china:ro
+    networks:
+      - fedagent-net
+    environment:
+      <<: *common-env
+      NODE_ID: china
+    depends_on:
+      - fl-aggregator
+
+  # ── Europe Node ───────────────────────────────────────────────────────────
+  node-europe:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: fedagent-node-eu
+    volumes:
+      <<: *common-volumes
+      - ./data/synthetic/europe:/fedagent-chain/data/synthetic/europe:ro
+    networks:
+      - fedagent-net
+    environment:
+      <<: *common-env
+      NODE_ID: europe
+    depends_on:
+      - fl-aggregator
+
+  # ── MLflow Experiment Tracking ────────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.8.1
+    container_name: fedagent-mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri /mlflow/mlruns
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    networks:
+      - fedagent-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Streamlit Inclusion Dashboard ─────────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: fedagent-dashboard
+    command: streamlit run src/visualization/inclusion_dashboard.py --server.port 8501 --server.headless true
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./experiments:/fedagent-chain/experiments:ro
+      - ./src:/fedagent-chain/src:ro
+    networks:
+      - fedagent-net
+    environment:
+      <<: *common-env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+networks:
+  fedagent-net:
+    driver: bridge
+    name: fedagent-chain-network
+
+volumes:
+  blockchain-data:
+    name: fedagent-blockchain-data
+  mlflow-data:
+    name: fedagent-mlflow-data

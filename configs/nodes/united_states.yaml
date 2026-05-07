@@ -1,0 +1,13 @@
+# united_states Node Configuration
+node_id: united_states
+data:
+  n_users: 2500
+  n_jobs: 1250
+  n_pairs: 12500
+federated:
+  local_epochs: 5
+  batch_size: 64
+  learning_rate: 0.001
+privacy:
+  clipping_threshold: 1.0
+  noise_multiplier: 0.1
