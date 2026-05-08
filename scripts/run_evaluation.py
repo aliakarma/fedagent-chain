@@ -100,21 +100,26 @@ def _find_best_checkpoint(run_dir: Path) -> Path:
     if not history:
         return final_path
 
-    # Find the round with the highest mean_f1
-    best_round_data = max(history, key=lambda r: r.get("mean_f1", 0.0))
-    best_round = best_round_data.get("round", len(history))
-
-    # Checkpoints are saved every 5 rounds — find nearest saved round
+    # Pick the round with the highest mean_f1.
+    # If ties, pick the LATER round (more stable).
+    # Only consider rounds that actually have a checkpoint file.
     ckpt_dir = run_dir / "checkpoints"
-    # Prefer best round checkpoint if it exists
+    valid_history = []
+    for r in history:
+        r_num = r.get("round")
+        if r_num is not None and (ckpt_dir / f"global_model_round_{r_num:03d}.pt").exists():
+            valid_history.append(r)
+
+    if not valid_history:
+        logger.warning("No round-specific checkpoints found, using final_model.pt", run_dir=str(run_dir))
+        return final_path
+
+    best_round_data = max(valid_history, key=lambda r: (r.get("mean_f1", 0.0), r.get("round", 0)))
+    best_round = best_round_data.get("round")
+    
     candidate = ckpt_dir / f"global_model_round_{best_round:03d}.pt"
-    if candidate.exists():
-        logger.info(
-            "Using best-round checkpoint",
-            round=best_round,
-            f1=round(best_round_data.get("mean_f1", 0.0), 4),
-        )
-        return candidate
+    logger.info("Selected best checkpoint", round=best_round, f1=round(best_round_data.get("mean_f1", 0.0), 4), run_dir=run_dir.name)
+    return candidate
 
     # Fall back to the nearest saved checkpoint <= best_round
     saved = sorted(ckpt_dir.glob("global_model_round_*.pt"))

@@ -1,4 +1,4 @@
 comparison,mean_diff,t_statistic,p_value,cohens_d,significant
 FedAgent-Chain vs Standard FedAvg,0.2337,1.3877,0.2996,0.8012,False
-FedAgent-Chain vs Local Baseline,0.233,1.3793,0.3018,0.7964,False
+FedAgent-Chain vs Local Baseline,0.2337,1.3877,0.2996,0.8012,False
 FedAgent-Chain vs Centralized,0.2337,1.3877,0.2996,0.8012,False
