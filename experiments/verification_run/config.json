@@ -1,0 +1,42 @@
+{
+  "defaults": [
+    "/default"
+  ],
+  "experiment": {
+    "name": "fedagent_chain_full",
+    "description": "Full FedAgent-Chain framework with fairness-aware FL and blockchain",
+    "variant": "fedagent_chain"
+  },
+  "seed": 42,
+  "federated": {
+    "n_rounds": "2",
+    "min_clients": 4,
+    "local_epochs": 5,
+    "batch_size": 64,
+    "learning_rate": 0.001
+  },
+  "privacy": {
+    "enabled": true,
+    "clipping_threshold": 1.0,
+    "noise_multiplier": 0.1
+  },
+  "fairness": {
+    "enabled": true,
+    "lambda_fairness": 0.1,
+    "protected_groups": [
+      "disability_category",
+      "language_primary",
+      "preferred_work_mode",
+      "node_id"
+    ]
+  },
+  "blockchain": {
+    "enabled": true,
+    "records_per_block": 10
+  },
+  "data": {
+    "n_users_per_node": 2500,
+    "n_jobs_per_node": 1250,
+    "n_pairs_per_node": 12500
+  }
+}
