@@ -62,10 +62,14 @@ def parse_args() -> argparse.Namespace:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def find_run_dir(runs_dir: Path, experiment_name: str) -> Path | None:
-    """Return the most recent run directory matching experiment_name prefix."""
+def find_run_dir(runs_dir: Path, experiment_name: str, seed: int | None = None) -> Path | None:
+    """Return the most recent run directory matching experiment_name and optionally seed."""
+    pattern = f"{experiment_name}_*"
+    if seed is not None:
+        pattern = f"{experiment_name}_seed{seed}_*"
+    
     candidates = sorted(
-        runs_dir.glob(f"{experiment_name}_*"),
+        runs_dir.glob(pattern),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -557,10 +561,10 @@ def main() -> None:
 
     # ── Locate simulation run directories ─────────────────────────────────────
     run_map = {
-        "FedAgent-Chain":  find_run_dir(runs_dir, "fedagent_chain_full"),
-        "Standard FedAvg": find_run_dir(runs_dir, "ablation_no_fairness"),
-        "Local Baseline":  find_run_dir(runs_dir, "baseline_local"),
-        "Centralized":     find_run_dir(runs_dir, "baseline_centralized"),
+        "FedAgent-Chain":  find_run_dir(runs_dir, "fedagent_chain_full", args.seed),
+        "Standard FedAvg": find_run_dir(runs_dir, "ablation_no_fairness", args.seed),
+        "Local Baseline":  find_run_dir(runs_dir, "baseline_local", args.seed),
+        "Centralized":     find_run_dir(runs_dir, "baseline_centralized", args.seed),
     }
 
     missing = [k for k, v in run_map.items() if v is None]
