@@ -1,13 +1,40 @@
-# Ablation: FL without fairness optimization
+# Ablation: FL without fairness optimization (Standard FedAvg)
 # Paper Table 3: Standard FL vs Fairness-Aware FL comparison
-
-defaults:
-  - /experiment/fedagent_chain_full
+# Standalone config (load_config does not use Hydra composition)
 
 experiment:
   name: ablation_no_fairness
   description: "Ablation study — standard FedAvg without fairness regularization"
+  variant: ablation_no_fairness
+
+seed: 42
+
+federated:
+  n_rounds: 20
+  min_clients: 4
+  local_epochs: 5
+  batch_size: 64
+  learning_rate: 0.001
+
+privacy:
+  enabled: true
+  clipping_threshold: 1.0
+  noise_multiplier: 0.1
 
 fairness:
   enabled: false
   lambda_fairness: 0.0
+  protected_groups:
+    - disability_category
+    - language_primary
+    - preferred_work_mode
+    - node_id
+
+blockchain:
+  enabled: true
+  records_per_block: 10
+
+data:
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500
