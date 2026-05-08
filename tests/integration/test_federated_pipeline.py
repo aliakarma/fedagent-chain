@@ -57,15 +57,17 @@ def two_node_clients(small_cfg):
         data = generate_synthetic_node_data(
             node_id=node_id, n_users=60, n_jobs=30, n_pairs=120, seed=42
         )
-        dataset = EmploymentDataset(
+        full_ds = EmploymentDataset(
             outcomes_df=data["outcomes"],
             users_df=data["users"],
             jobs_df=data["jobs"],
             consent_filter=True,
         )
+        train_ds, test_ds = full_ds.split(test_size=0.20, seed=42)
         client = FederatedClient(
             node_id=node_id,
-            dataset=dataset,
+            train_dataset=train_ds,
+            test_dataset=test_ds,
             cfg=small_cfg,
             blockchain=blockchain,
             device="cpu",

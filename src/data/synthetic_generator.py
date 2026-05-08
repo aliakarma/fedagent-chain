@@ -195,7 +195,7 @@ def generate_job_profiles(
 def compute_suitability_label(
     user: UserProfile,
     job: JobProfile,
-    threshold: float = 0.55,
+    threshold: float = 0.50,
     rng: Optional[np.random.Generator] = None,
 ) -> Tuple[int, float]:
     """Compute a deterministic suitability label for a user-job pair.
@@ -240,17 +240,19 @@ def compute_suitability_label(
     # Work mode preference match
     mode_match = 1.0 if user.preferred_work_mode == job.work_mode else 0.5
 
-    # Weighted composite score (α=0.4, β=0.25, γ=0.2, δ=0.15)
+    # Label-generating oracle uses deliberately different coefficients
+    # from the model's scoring function (α=0.40 / β=0.25 / γ=0.20 / δ=0.15)
+    # to prevent artificial separability.
     score = (
-        0.40 * skill_overlap
-        + 0.25 * accom_coverage
+        0.35 * skill_overlap
+        + 0.30 * accom_coverage
         + 0.20 * lang_match
         + 0.15 * mode_match
     )
 
-    # Add small noise for label diversity
+    # Add noise for label diversity
     if rng is not None:
-        score += float(rng.normal(0, 0.05))
+        score += float(rng.normal(0, 0.08))  # wider noise → more realistic difficulty
         score = float(np.clip(score, 0.0, 1.0))
 
     label = 1 if score >= threshold else 0

@@ -217,3 +217,61 @@ class EmploymentDataset(Dataset):
             self.users_df.loc[uid, attribute] if uid in self.users_df.index else "unknown"
             for uid in user_ids
         ])
+    def split(
+        self,
+        test_size: float = 0.20,
+        seed: int = 42,
+    ) -> tuple["EmploymentDataset", "EmploymentDataset"]:
+        """Return (train_dataset, test_dataset) with stratified split on label.
+
+        Parameters
+        ----------
+        test_size : float
+            Fraction of pairs to hold out for testing. Default 0.20 (20 %).
+        seed : int
+            Random seed for reproducible splits.
+
+        Returns
+        -------
+        tuple of (EmploymentDataset, EmploymentDataset)
+            train_dataset, test_dataset
+        """
+        from sklearn.model_selection import train_test_split
+
+        labels = self.outcomes["suitability_label"].values
+        idx = np.arange(len(self.outcomes))
+
+        train_idx, test_idx = train_test_split(
+            idx,
+            test_size=test_size,
+            random_state=seed,
+            stratify=labels,
+        )
+
+        train_outcomes = self.outcomes.iloc[train_idx].reset_index(drop=True)
+        test_outcomes = self.outcomes.iloc[test_idx].reset_index(drop=True)
+
+        # Restore DataFrame columns from index so downstream code works
+        users_df_reset = self.users_df.reset_index()
+        jobs_df_reset = self.jobs_df.reset_index()
+
+        train_weights = (
+            self.sample_weights[train_idx]
+            if self.sample_weights is not None else None
+        )
+
+        train_ds = EmploymentDataset(
+            outcomes_df=train_outcomes,
+            users_df=users_df_reset,
+            jobs_df=jobs_df_reset,
+            consent_filter=False,   # Already filtered upstream
+            sample_weights=train_weights,
+        )
+        test_ds = EmploymentDataset(
+            outcomes_df=test_outcomes,
+            users_df=users_df_reset,
+            jobs_df=jobs_df_reset,
+            consent_filter=False,
+            sample_weights=None,    # Never weight the test set
+        )
+        return train_ds, test_ds

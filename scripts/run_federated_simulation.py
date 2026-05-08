@@ -87,8 +87,8 @@ def load_node_dataset(
     data_dir: Path,
     cfg: object,
     seed: int,
-) -> EmploymentDataset:
-    """Load or generate dataset for a single node."""
+) -> tuple:
+    """Load or generate dataset for a single node and return train/test split."""
     node_dir = data_dir / node_id
     users_csv = node_dir / "users.csv"
     jobs_csv = node_dir / "jobs.csv"
@@ -102,20 +102,20 @@ def load_node_dataset(
     else:
         logger.info("Generating synthetic dataset", node_id=node_id)
         data = generate_synthetic_node_data(
-            node_id=node_id,
-            n_users=2500,
-            n_jobs=1250,
-            n_pairs=12500,
-            seed=seed,
+            node_id=node_id, n_users=2500, n_jobs=1250, n_pairs=12500, seed=seed
         )
-        users_df, jobs_df, outcomes_df = data["users"], data["jobs"], data["outcomes"]
+        users_df, jobs_df, outcomes_df = (
+            data["users"], data["jobs"], data["outcomes"]
+        )
 
-    return EmploymentDataset(
+    full_dataset = EmploymentDataset(
         outcomes_df=outcomes_df,
         users_df=users_df,
         jobs_df=jobs_df,
         consent_filter=True,
     )
+    train_ds, test_ds = full_dataset.split(test_size=0.20, seed=seed)
+    return train_ds, test_ds
 
 
 def main() -> None:
@@ -159,16 +159,24 @@ def main() -> None:
 
     clients = []
     for i, node_id in enumerate(nodes):
-        dataset = load_node_dataset(node_id, data_dir, cfg, seed=args.seed + i * 1000)
+        train_ds, test_ds = load_node_dataset(
+            node_id, data_dir, cfg, seed=args.seed + i * 1000
+        )
         client = FederatedClient(
             node_id=node_id,
-            dataset=dataset,
+            train_dataset=train_ds,
+            test_dataset=test_ds,
             cfg=cfg,
             blockchain=blockchain,
             device="cpu",
         )
         clients.append(client)
-        logger.info("Client created", node_id=node_id, n_samples=len(dataset))
+        logger.info(
+            "Client created",
+            node_id=node_id,
+            n_train=len(train_ds),
+            n_test=len(test_ds),
+        )
 
     # Create server and run simulation
     use_mlflow = not args.no_mlflow and cfg.get("tracking", {}).get("use_mlflow", True)
@@ -219,7 +227,7 @@ def main() -> None:
         )
 
         print(f"\n{'='*60}")
-        print(f"✅ Simulation complete: {run_name}")
+        print(f" [OK] Simulation complete: {run_name}")
         print(f"{'='*60}")
         print(f"  Best F1        : {results.get('best_f1', 0.0):.4f} (round {results.get('best_f1_round', 0)})")
         print(f"  Total rounds   : {results.get('convergence_rounds', 0)}")

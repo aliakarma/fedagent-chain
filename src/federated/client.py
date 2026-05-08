@@ -55,13 +55,16 @@ class FederatedClient:
     def __init__(
         self,
         node_id: str,
-        dataset: EmploymentDataset,
+        train_dataset: EmploymentDataset,
+        test_dataset: EmploymentDataset,
         cfg: DictConfig,
         blockchain: PermissionedBlockchain,
         device: str = "cpu",
     ) -> None:
         self.node_id = node_id
-        self.dataset = dataset
+        self.train_dataset = train_dataset
+        self.test_dataset = test_dataset
+        self.dataset = train_dataset  # backward-compatible alias
         self.cfg = cfg
         self.blockchain = blockchain
         self.device = torch.device(device)
@@ -124,7 +127,7 @@ class FederatedClient:
 
         # Local training
         loader = DataLoader(
-            self.dataset,
+            self.train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
             drop_last=False,
@@ -187,15 +190,15 @@ class FederatedClient:
             node_id=self.node_id,
             round_number=round_number,
             local_epochs=self.local_epochs,
-            n_samples=len(self.dataset),
+            n_samples=len(self.train_dataset),
             train_loss=round(metrics["train_loss"], 4),
             f1=round(metrics.get("f1", 0.0), 4),
         )
 
-        return protected_delta, len(self.dataset), metrics
+        return protected_delta, len(self.train_dataset), metrics
 
     def _evaluate_local(self, model: EmploymentMatchingModel) -> Dict[str, float]:
-        """Evaluate the locally trained model on the local dataset.
+        """Evaluate the locally trained model on the held-out test dataset.
 
         Parameters
         ----------
@@ -208,7 +211,7 @@ class FederatedClient:
             Evaluation metrics including F1, accuracy, and per-group fairness scores.
         """
         model.eval()
-        loader = DataLoader(self.dataset, batch_size=256, shuffle=False)
+        loader = DataLoader(self.test_dataset, batch_size=256, shuffle=False)
 
         all_labels, all_preds = [], []
         with torch.no_grad():

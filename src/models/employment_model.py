@@ -129,7 +129,7 @@ class EmploymentMatchingModel(nn.Module):
             Parameter name → numpy array mapping.
         """
         torch_state = {
-            name: torch.from_numpy(arr.copy())
+            name: torch.from_numpy(np.array(arr).copy())
             for name, arr in numpy_state.items()
         }
         self.load_state_dict(torch_state)

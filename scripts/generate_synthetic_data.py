@@ -103,7 +103,7 @@ def main() -> None:
         total_jobs=n_jobs * 4,
         total_pairs=n_pairs * 4,
     )
-    print(f"\n✅ Synthetic dataset saved to: {args.output_dir}")
+    print(f"\n[OK] Synthetic dataset saved to: {args.output_dir}")
     print(f"   Total users  : {n_users * 4:,}")
     print(f"   Total jobs   : {n_jobs * 4:,}")
     print(f"   Total pairs  : {n_pairs * 4:,}")

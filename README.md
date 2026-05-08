@@ -204,7 +204,7 @@ make reproduce  # Runs all steps above sequentially
 
 | Category | Metrics |
 |---|---|
-| Employment Matching | Accuracy, Precision, Recall, F1, P@K, R@K |
+| Employment Matching | Accuracy, Precision, Recall, F1 (on held-out test sets) |
 | Fairness | D_fair across disability, language, gender, region |
 | Blockchain | Hash completeness, consent rate, transaction latency |
 | Agentic AI | Accommodation relevance, upskilling quality, language adequacy |

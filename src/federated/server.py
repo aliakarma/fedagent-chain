@@ -238,7 +238,7 @@ class FederatedServer:
         prefix = "final_model" if final else f"global_model_round_{round_num:03d}"
         # Convert numpy state back to torch for saving
         torch_state = {
-            name: torch.from_numpy(arr.copy())
+            name: torch.from_numpy(np.array(arr).copy())
             for name, arr in self.global_state.items()
         }
         ckpt_path = self.output_dir / "checkpoints" / f"{prefix}.pt"
