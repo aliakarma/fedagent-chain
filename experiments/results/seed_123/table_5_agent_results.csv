@@ -1,7 +1,7 @@
 Agent,Metric,Score
-Employment Matching,Mean Confidence,0.6937
+Employment Matching,Mean Confidence,0.6976
 Upskilling,Skill Gap Coverage,1.0
-Accommodation,Accommodation Coverage,0.7308
-Multilingual,Language Adequacy,0.969
-Governance,High-Risk Detection Rate,0.7333
-Governance,False Positive Rate,0.0595
+Accommodation,Accommodation Coverage,0.7586
+Multilingual,Language Adequacy,0.9606
+Governance,High-Risk Detection Rate,0.75
+Governance,False Positive Rate,0.1705

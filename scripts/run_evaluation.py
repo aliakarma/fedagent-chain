@@ -63,7 +63,11 @@ def parse_args() -> argparse.Namespace:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def find_run_dir(runs_dir: Path, experiment_name: str, seed: int | None = None) -> Path | None:
-    """Return the most recent run directory matching experiment_name and optionally seed."""
+    """Return the most recent run directory matching experiment_name and optionally seed.
+    
+    Filters out directories that do not contain a checkpoints/ folder with at least
+    one .pt file, allowing fallback to older successful runs if the most recent one failed.
+    """
     pattern = f"{experiment_name}_*"
     if seed is not None:
         pattern = f"{experiment_name}_seed{seed}_*"
@@ -73,7 +77,13 @@ def find_run_dir(runs_dir: Path, experiment_name: str, seed: int | None = None) 
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
-    return candidates[0] if candidates else None
+    
+    for candidate in candidates:
+        ckpt_dir = candidate / "checkpoints"
+        if ckpt_dir.exists() and any(ckpt_dir.glob("*.pt")):
+            return candidate
+            
+    return None
 
 
 def _find_best_checkpoint(run_dir: Path) -> Path:
