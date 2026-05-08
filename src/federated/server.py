@@ -153,7 +153,7 @@ class FederatedServer:
             )
 
             # Save checkpoint every 5 rounds
-            if round_num % 5 == 0:
+            if round_num % 1 == 0:
                 self._save_checkpoint(round_num)
 
         # Save final model

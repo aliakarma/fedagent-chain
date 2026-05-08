@@ -196,25 +196,25 @@ python scripts/generate_figures.py \
     --output-dir experiments/figures/
 ```
 
-### Empirical Results (Phase 2 — Seed 42, 20 rounds, 4 nodes)
+### Empirical Results (Phase 3 — Seed 42, 20 rounds, 4 nodes)
 
 **Table 2: Model Performance (F1 on held-out test sets)**
 
 | Method | Accuracy | Precision | Recall | F1 | F1 Std |
 |---|---|---|---|---|---|
-| **FedAgent-Chain** | 0.5184 | 0.5189 | 0.9903 | **0.6761** | 0.0807 |
-| Standard FedAvg | 0.5177 | 0.5185 | 0.9907 | 0.6759 | 0.0806 |
-| Local Baseline | 0.5199 | 0.5195 | 0.9918 | 0.6771 | 0.0802 |
-| Centralized | 0.5199 | 0.5195 | 0.9918 | 0.6771 | 0.0802 |
+| **FedAgent-Chain** | 0.5263 | 0.5253 | 0.8214 | **0.6374** | 0.0714 |
+| Standard FedAvg | 0.5267 | 0.5231 | 0.9744 | 0.6762 | 0.0800 |
+| Local Baseline | 0.5194 | 0.5191 | 0.9977 | 0.6782 | 0.0801 |
+| Centralized | 0.5194 | 0.5191 | 0.9977 | 0.6782 | 0.0801 |
 
 **Table 3: Fairness Disparity (D_fair)**
 
-| Protected Attribute | FedAgent-Chain | Standard FedAvg | Local Baseline |
+| Protected Attribute | FedAgent-Chain | Standard FedAvg | Reduction |
 |---|---|---|---|
-| Disability Category | 0.0360 | 0.0360 | 0.0371 |
-| Language Group | 0.3941 | 0.3941 | 0.3903 |
-| Work Mode | 0.0048 | 0.0048 | 0.0030 |
-| Regional Node | 0.2099 | 0.2099 | 0.2065 |
+| Disability Category | 0.0729 | 0.0354 | -105.9% |
+| Language Group | 0.3499 | 0.3875 | **+9.7%** |
+| Work Mode | 0.0280 | 0.0008 | -3400.0% |
+| Regional Node | 0.1890 | 0.2050 | **+7.8%** |
 
 **Table 4: Blockchain Audit**
 - Hash completeness: **100%** (80/80 records)
@@ -222,13 +222,12 @@ python scripts/generate_figures.py \
 - Total audit records: 80 (4 nodes × 20 rounds)
 
 **Table 7: System Overhead**
-- Average round duration: **~98s** (4 nodes × 5 local epochs)
-- Total simulation time: **~1961s** for 20 FL rounds
+- Average round duration: **~96s** (4 nodes × 3 local epochs)
+- Total simulation time: **~1926s** for 20 FL rounds
 
-> **Implementation note**: The model uses `BatchNorm1d` layers. FedAvg accumulates parameter deltas
-> across rounds, which can corrupt BatchNorm running statistics in the final checkpoint. The evaluation
-> pipeline automatically detects NaN outputs and falls back to batch-statistics mode (equivalent to
-> computing fresh batch norms per inference batch), which recovers correct F1 scores.
+> **Implementation note**: The model uses `LayerNorm` instead of `BatchNorm1d` to ensure stability
+> in federated learning across Non-IID nodes. This prevents the "running stats corruption" issue
+> common with standard FedAvg and BatchNorm. F1/Fairness trade-offs are controlled by `lambda_fairness: 0.5`.
 
 
 ---

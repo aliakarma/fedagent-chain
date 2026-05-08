@@ -16,9 +16,9 @@ seed: 42
 federated:
   n_rounds: 20              # T — total federated rounds (paper: T=20)
   min_clients: 4
-  local_epochs: 5           # E — local training epochs per round
+  local_epochs: 3           # E — local training epochs per round
   batch_size: 64
-  learning_rate: 0.001
+  learning_rate: 0.0001
 
 privacy:
   enabled: true
@@ -27,7 +27,7 @@ privacy:
 
 fairness:
   enabled: true
-  lambda_fairness: 0.1
+  lambda_fairness: 0.5
   protected_groups:
     - disability_category
     - language_primary

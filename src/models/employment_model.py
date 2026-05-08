@@ -55,7 +55,7 @@ class EmploymentMatchingModel(nn.Module):
         for hdim in hidden_dims:
             layers.extend([
                 nn.Linear(prev_dim, hdim),
-                nn.BatchNorm1d(hdim),
+                nn.LayerNorm(hdim),
                 nn.ReLU(inplace=True),
                 nn.Dropout(p=dropout_rate),
             ])

@@ -35,6 +35,7 @@ from src.blockchain.chain import PermissionedBlockchain
 from src.data.dataset import EmploymentDataset
 from src.data.synthetic_generator import generate_synthetic_node_data
 from src.federated.client import FederatedClient
+from src.federated.fairness import fairness_reweight_samples
 from src.federated.server import FederatedServer
 from src.utils.config import config_to_dict, get_git_commit_hash, load_config
 from src.utils.io_utils import ensure_dir, save_json
@@ -114,6 +115,24 @@ def load_node_dataset(
         jobs_df=jobs_df,
         consent_filter=True,
     )
+
+    fairness_cfg     = cfg.get("fairness", {})
+    fairness_enabled = bool(fairness_cfg.get("enabled", True))
+
+    if fairness_enabled:
+        group_labels    = full_dataset.get_group_labels("disability_category")
+        sample_weights  = fairness_reweight_samples(group_labels)
+        # Rebuild full_dataset with weights
+        users_df_reset  = full_dataset.users_df.reset_index()
+        jobs_df_reset   = full_dataset.jobs_df.reset_index()
+        full_dataset    = EmploymentDataset(
+            outcomes_df=full_dataset.outcomes,
+            users_df=users_df_reset,
+            jobs_df=jobs_df_reset,
+            consent_filter=False,
+            sample_weights=sample_weights,
+        )
+
     train_ds, test_ds = full_dataset.split(test_size=0.20, seed=seed)
     return train_ds, test_ds
 

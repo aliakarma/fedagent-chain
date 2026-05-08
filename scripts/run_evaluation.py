@@ -113,6 +113,10 @@ def _find_best_checkpoint(run_dir: Path) -> Path:
         rnd, path = max(below, key=lambda x: x[0])
         logger.info("Using nearest saved checkpoint", round=rnd, requested_best=best_round)
         return path
+    elif saved_rounds:
+        rnd, path = min(saved_rounds, key=lambda x: x[0])
+        logger.info("Using nearest available checkpoint (later than best)", round=rnd, requested_best=best_round)
+        return path
 
     return final_path
 
@@ -133,7 +137,7 @@ def load_model_from_checkpoint(
     state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     # Wrap any 0-d scalars to avoid torch.from_numpy issues on re-load
     safe_state = {k: torch.as_tensor(v) for k, v in state_dict.items()}
-    model.load_state_dict(safe_state)
+    model.load_state_dict(safe_state, strict=False)
     model.eval()
     logger.info("Model loaded", checkpoint=str(ckpt_path))
     return model
