@@ -26,7 +26,7 @@ def test_client_reads_local_epochs_from_federated_subkey():
     data = generate_synthetic_node_data("saudi_arabia", 30, 15, 60, seed=42)
     ds = EmploymentDataset(data["outcomes"], data["users"], data["jobs"])
     bc = PermissionedBlockchain(records_per_block=5)
-    client = FederatedClient("saudi_arabia", ds, cfg, bc, device="cpu")
+    client = FederatedClient("saudi_arabia", ds, ds, cfg, bc, device="cpu")
 
     assert client.local_epochs == 7,   "local_epochs not read from federated sub-key"
     assert client.batch_size   == 32,  "batch_size not read from federated sub-key"

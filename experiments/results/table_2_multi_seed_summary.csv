@@ -1,0 +1,5 @@
+Method,F1_mean,F1_std,F1_min,F1_max,n_seeds,CI_95_lower,CI_95_upper
+FedAgent-Chain,0.6373,0.0001,0.6372,0.6374,3,0.637,0.6377
+Standard FedAvg,0.6764,0.0003,0.6762,0.6768,3,0.6756,0.6772
+Local Baseline,0.6778,0.0011,0.6766,0.6787,3,0.6752,0.6805
+Centralized,0.6777,0.0008,0.6768,0.6782,3,0.6758,0.6795

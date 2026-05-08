@@ -187,11 +187,17 @@ python scripts/run_federated_simulation.py \
 python scripts/run_evaluation.py \
     --runs-dir experiments/runs/ \
     --results-dir experiments/results/ \
-    --data-dir data/synthetic --seed 42
+    --data-dir data/synthetic --seed 42 --seed-subdir
 
-# Step 6: Generate publication figures
+# Step 6: Multi-seed aggregation (Seeds 42, 123, 2024)
+# Run simulations for other seeds first, then evaluate with --seed-subdir, then:
+python scripts/aggregate_multi_seed_results.py --seeds 42 123 2024
+
+# Step 7: Verify submission readiness
+python scripts/verify_submission_readiness.py
+
+# Step 8: Generate publication figures
 python scripts/generate_figures.py \
-    --runs-dir experiments/runs/ \
     --results-dir experiments/results/ \
     --output-dir experiments/figures/
 ```

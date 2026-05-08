@@ -1,6 +1,6 @@
 {
-  "chain_length": 2,
-  "total_records": 10,
+  "chain_length": 4,
+  "total_records": 30,
   "chain_integrity_valid": true,
   "blocks": [
     {
@@ -121,6 +121,224 @@
           "policy_ref": "policy_united_states_gdpr",
           "round_number": 3,
           "timestamp": "2026-05-08T12:35:28.609533+00:00",
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "block_index": 2,
+      "block_hash": "ee010352f31475444f8918e8cbf733fa33dcfb7c78353775b82343073ef9d237",
+      "previous_hash": "f0ae39ed631a7556f4c75fcfcc44b41a3ad57467514515c3af9f51eb27b4c01e",
+      "timestamp": "2026-05-08T12:43:10.190966+00:00",
+      "n_records": 10,
+      "records": [
+        {
+          "record_id": "d6a6a506-90ff-421f-be97-b19efa7f45d3",
+          "node_id": "china",
+          "hash": "140f11c4c88d269bbdd180c7bc9c11e2a98bc6c930db5319e5ba617601f9abf0",
+          "consent_ref": "consent_china_v1",
+          "policy_ref": "policy_china_gdpr",
+          "round_number": 3,
+          "timestamp": "2026-05-08T12:36:13.152923+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "c9bbe459-7f40-4ed7-acad-4d7dc13b0bd8",
+          "node_id": "europe",
+          "hash": "4961e58ebe7e3bb9e0cb1c6cd4d41446a954eee08ac19ef664345b7ef6ed56f5",
+          "consent_ref": "consent_europe_v1",
+          "policy_ref": "policy_europe_gdpr",
+          "round_number": 3,
+          "timestamp": "2026-05-08T12:36:58.339441+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "d4c39e0d-2720-4247-9c35-0f9dc7f0dd57",
+          "node_id": "saudi_arabia",
+          "hash": "04dd5007feac96b7e1233d7717cd8f04958c2cef5fcedc6ade9f950c8f5b861a",
+          "consent_ref": "consent_saudi_arabia_v1",
+          "policy_ref": "policy_saudi_arabia_gdpr",
+          "round_number": 4,
+          "timestamp": "2026-05-08T12:37:43.191369+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "10107179-9438-42c3-b41b-8ba84e04442b",
+          "node_id": "united_states",
+          "hash": "2900ba04e091de34ae537480f6d3e486af37e9666ae904a3ce4438edcc17d300",
+          "consent_ref": "consent_united_states_v1",
+          "policy_ref": "policy_united_states_gdpr",
+          "round_number": 4,
+          "timestamp": "2026-05-08T12:38:27.754175+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "03cb6797-876a-4904-9260-e6fac59005ec",
+          "node_id": "china",
+          "hash": "6b64524432a7a3d6ab0572f6acb3471b6633e5d0a54c6bcf6f71d8f39e064529",
+          "consent_ref": "consent_china_v1",
+          "policy_ref": "policy_china_gdpr",
+          "round_number": 4,
+          "timestamp": "2026-05-08T12:39:12.813380+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "9ec0bd4a-a2de-4a74-8a92-ae960bb85f99",
+          "node_id": "europe",
+          "hash": "1715b0f5adf5fb13749e2a3117aacf3370b936bd4dd373e68a5b93dfc0540c2d",
+          "consent_ref": "consent_europe_v1",
+          "policy_ref": "policy_europe_gdpr",
+          "round_number": 4,
+          "timestamp": "2026-05-08T12:39:59.818145+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "3fbfc03b-1c46-4b08-ad5f-6f27bc4f8bf0",
+          "node_id": "saudi_arabia",
+          "hash": "f7e2f75479888f8e564c591e727236c9cc4585e7f5f3c6b7010b6ce3ac1595de",
+          "consent_ref": "consent_saudi_arabia_v1",
+          "policy_ref": "policy_saudi_arabia_gdpr",
+          "round_number": 5,
+          "timestamp": "2026-05-08T12:40:45.376989+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "2eced30b-1c29-43ae-b92a-1e926d948a9b",
+          "node_id": "united_states",
+          "hash": "efc7feb82fddc4878260672542e7e62dbf9e0b3191069eb0041527a2699d18df",
+          "consent_ref": "consent_united_states_v1",
+          "policy_ref": "policy_united_states_gdpr",
+          "round_number": 5,
+          "timestamp": "2026-05-08T12:41:31.324054+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "f2039038-2d9a-4690-861f-ec97b5097ac0",
+          "node_id": "china",
+          "hash": "fb4380b99811122e142b051659d4a3f2606a7a497524b420c31de384846df8bb",
+          "consent_ref": "consent_china_v1",
+          "policy_ref": "policy_china_gdpr",
+          "round_number": 5,
+          "timestamp": "2026-05-08T12:42:17.770426+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "e1f3799a-dbe4-497b-a690-578abddf8aa6",
+          "node_id": "europe",
+          "hash": "399d70651524fe3408f62125f251db233c3b8b22ae9ebcb53a8d1b88a2a7d73a",
+          "consent_ref": "consent_europe_v1",
+          "policy_ref": "policy_europe_gdpr",
+          "round_number": 5,
+          "timestamp": "2026-05-08T12:43:10.189961+00:00",
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "block_index": 3,
+      "block_hash": "02c88c5d97a015a417a18d0a38d131705a00d19440c8940d194c064f59bac1e7",
+      "previous_hash": "ee010352f31475444f8918e8cbf733fa33dcfb7c78353775b82343073ef9d237",
+      "timestamp": "2026-05-08T12:50:36.886790+00:00",
+      "n_records": 10,
+      "records": [
+        {
+          "record_id": "79ff006d-4ed0-4257-a5b8-c87fe57bc9c6",
+          "node_id": "saudi_arabia",
+          "hash": "f1881ae9ea4270e0f6a9a9cd94c84baa17fd9ef821fa35dffc1a87fe32539ed4",
+          "consent_ref": "consent_saudi_arabia_v1",
+          "policy_ref": "policy_saudi_arabia_gdpr",
+          "round_number": 6,
+          "timestamp": "2026-05-08T12:43:52.492271+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "9de9f25f-9726-4715-b354-e399b8344754",
+          "node_id": "united_states",
+          "hash": "5cefbc652c812b4e281268c82b74c5c823d64dd79157b876e6473e195e346b36",
+          "consent_ref": "consent_united_states_v1",
+          "policy_ref": "policy_united_states_gdpr",
+          "round_number": 6,
+          "timestamp": "2026-05-08T12:44:36.611791+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "f4c92b2f-52cf-4617-8211-43125382c46c",
+          "node_id": "china",
+          "hash": "0fe91cb648b75330c6e8a0f94ae08be4da18e270382c11939e09c63fa32b8a5e",
+          "consent_ref": "consent_china_v1",
+          "policy_ref": "policy_china_gdpr",
+          "round_number": 6,
+          "timestamp": "2026-05-08T12:45:18.701843+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "8afb56c4-9caa-4526-88e8-3ace260f98a3",
+          "node_id": "europe",
+          "hash": "690f09b041588ef144458b0d91076c9df31a5e55de5d02c6baf69efd95e66719",
+          "consent_ref": "consent_europe_v1",
+          "policy_ref": "policy_europe_gdpr",
+          "round_number": 6,
+          "timestamp": "2026-05-08T12:46:07.985282+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "be148952-204d-44cd-86fc-5ab97ccdd440",
+          "node_id": "saudi_arabia",
+          "hash": "6b537bb059eb7b36f37aa623632a4855244ff088b5db7bff3cc5b4019950e253",
+          "consent_ref": "consent_saudi_arabia_v1",
+          "policy_ref": "policy_saudi_arabia_gdpr",
+          "round_number": 7,
+          "timestamp": "2026-05-08T12:46:54.089556+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "56b7871c-4f25-40f9-92fb-40a53db74442",
+          "node_id": "united_states",
+          "hash": "16ee27750c5abf42f39b2ab3ee2533b1860a892a8332e5340579f018a2ceb3cc",
+          "consent_ref": "consent_united_states_v1",
+          "policy_ref": "policy_united_states_gdpr",
+          "round_number": 7,
+          "timestamp": "2026-05-08T12:47:40.998011+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "e9317592-9d47-43e7-bc37-4013ce0bf23b",
+          "node_id": "china",
+          "hash": "2f753e96e7b2e436507beafd7d4cfabc0f85b23755171ebe13090762c250ba65",
+          "consent_ref": "consent_china_v1",
+          "policy_ref": "policy_china_gdpr",
+          "round_number": 7,
+          "timestamp": "2026-05-08T12:48:26.357703+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "a85ab565-daa7-439d-855b-79a929e26454",
+          "node_id": "europe",
+          "hash": "cf7624d71507b1ad84113f241fe4ed6bfddcb86ed57c9f9740a7a900be747e70",
+          "consent_ref": "consent_europe_v1",
+          "policy_ref": "policy_europe_gdpr",
+          "round_number": 7,
+          "timestamp": "2026-05-08T12:49:10.405020+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "09bf268e-7cdd-492a-9e8e-7f8487a75fee",
+          "node_id": "saudi_arabia",
+          "hash": "a947ff422c7792dbdb4d0c1e34aa0838fab08fe035c1845937e96bdfd03acda5",
+          "consent_ref": "consent_saudi_arabia_v1",
+          "policy_ref": "policy_saudi_arabia_gdpr",
+          "round_number": 8,
+          "timestamp": "2026-05-08T12:49:54.566214+00:00",
+          "status": "accepted"
+        },
+        {
+          "record_id": "e00b6085-b67c-4666-8380-baa515e5b747",
+          "node_id": "united_states",
+          "hash": "81b4b7610c3fad2506a52b6f91f3adb58dc351725a2370d1318a0fa55e34cc2b",
+          "consent_ref": "consent_united_states_v1",
+          "policy_ref": "policy_united_states_gdpr",
+          "round_number": 8,
+          "timestamp": "2026-05-08T12:50:36.885784+00:00",
           "status": "accepted"
         }
       ]
