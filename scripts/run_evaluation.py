@@ -54,6 +54,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--data-dir",    type=str, default="data/synthetic",
                    help="Root directory of the synthetic dataset.")
     p.add_argument("--seed",        type=int, default=42)
+    p.add_argument("--seed-subdir", action="store_true",
+                   help="Save results to seed-specific subdirectory for multi-seed aggregation.")
     p.add_argument("--log-level",   type=str, default="INFO")
     return p.parse_args()
 
@@ -425,6 +427,113 @@ def generate_table_7_overhead(run_dir: Path, results_dir: Path) -> pd.DataFrame:
     return df
 
 
+def generate_table_5_agents(
+    seed: int,
+    results_dir: Path,
+    n_eval_users: int = 200,
+) -> pd.DataFrame:
+    """Table 5: Agentic AI service evaluation on synthetic test users."""
+    from omegaconf import OmegaConf
+    from src.agents.employment_agent import EmploymentAgent
+    from src.agents.governance_agent import GovernanceAgent
+    from src.agents.upskilling_agent import UpskillingAgent
+    from src.agents.accommodation_agent import AccommodationAgent
+    from src.agents.multilingual_agent import MultilingualCommunicationAgent
+    from src.data.synthetic_generator import (
+        generate_user_profiles, generate_job_profiles
+    )
+    from src.utils.seed_utils import get_rng
+
+    rng = get_rng(seed)
+
+    # Load config defaults
+    cfg = OmegaConf.create({
+        "alpha": 0.40, "beta": 0.25, "gamma": 0.20, "delta": 0.15, "top_k": 10,
+        "top_k_skills": 5, "review_threshold": 0.38,
+    })
+    gov_cfg = OmegaConf.create({"review_threshold": 0.38})
+
+    emp_agent   = EmploymentAgent(cfg, governance_threshold=0.70)
+    gov_agent   = GovernanceAgent(gov_cfg)
+    ups_agent   = UpskillingAgent(cfg, governance_threshold=0.70)
+    acc_agent   = AccommodationAgent(cfg, governance_threshold=0.70)
+    lang_agent  = MultilingualCommunicationAgent(cfg, governance_threshold=0.70)
+
+    users = generate_user_profiles("united_states", n_eval_users, rng)
+    users = [u for u in users if u.consent_given]
+    jobs  = generate_job_profiles("united_states", 100, rng)
+
+    emp_scores, gov_detections, gov_fps = [], [], []
+    ups_coverages, acc_coverages, lang_adequacies = [], [], []
+
+    for user in users[:n_eval_users]:
+        emp_out   = emp_agent.run(user_id=user.user_id, user=user, jobs=jobs)
+        gov_out   = gov_agent.run(
+            user_id=user.user_id,
+            employment_output=emp_out,
+            disability_category=user.disability_category.value,
+        )
+        ups_out   = ups_agent.run(
+            user_id=user.user_id, user=user,
+            top_jobs=jobs[: min(10, len(jobs))]
+        )
+
+        top_job_profile = None
+        if emp_out.recommendations:
+            top_job_id = emp_out.recommendations[0].get("job_id")
+            matched    = [j for j in jobs if j.job_id == top_job_id]
+            if matched:
+                top_job_profile = matched[0]
+
+        if top_job_profile:
+            acc_out = acc_agent.run(
+                user_id=user.user_id, user=user, job=top_job_profile
+            )
+            lang_out = lang_agent.run(
+                user_id=user.user_id, user=user,
+                job_language=top_job_profile.language_required,
+            )
+            acc_coverages.append(acc_out.metadata.get("coverage", 0.0))
+            lang_adequacies.append(lang_out.confidence)
+
+        emp_scores.append(emp_out.confidence)
+        # Governance: high-risk if risk_score > threshold
+        is_high_risk  = gov_out.risk_score > 0.38
+        # We treat low-confidence + multiple disability as ground-truth high-risk
+        gt_high_risk  = (
+            emp_out.confidence < 0.55
+            or user.disability_category.value == "multiple"
+        )
+        if gt_high_risk:
+            gov_detections.append(1 if is_high_risk else 0)
+        else:
+            gov_fps.append(1 if is_high_risk else 0)
+
+        if ups_out.recommendations:
+            ups_coverages.append(
+                ups_out.confidence
+            )
+
+    rows = [
+        {"Agent": "Employment Matching", "Metric": "Mean Confidence",
+         "Score": round(float(np.mean(emp_scores)), 4)},
+        {"Agent": "Upskilling", "Metric": "Skill Gap Coverage",
+         "Score": round(float(np.mean(ups_coverages)) if ups_coverages else 0.0, 4)},
+        {"Agent": "Accommodation", "Metric": "Accommodation Coverage",
+         "Score": round(float(np.mean(acc_coverages)) if acc_coverages else 0.0, 4)},
+        {"Agent": "Multilingual", "Metric": "Language Adequacy",
+         "Score": round(float(np.mean(lang_adequacies)) if lang_adequacies else 0.0, 4)},
+        {"Agent": "Governance", "Metric": "High-Risk Detection Rate",
+         "Score": round(float(np.mean(gov_detections)) if gov_detections else 0.0, 4)},
+        {"Agent": "Governance", "Metric": "False Positive Rate",
+         "Score": round(float(np.mean(gov_fps)) if gov_fps else 0.0, 4)},
+    ]
+    df = pd.DataFrame(rows)
+    df.to_csv(results_dir / "table_5_agent_results.csv", index=False)
+    logger.info("Table 5 saved (computed from agent runs)")
+    return df
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -433,8 +542,12 @@ def main() -> None:
     set_global_seed(args.seed)
 
     runs_dir    = Path(args.runs_dir)
-    results_dir = ensure_dir(Path(args.results_dir))
     data_dir    = Path(args.data_dir)
+
+    if args.seed_subdir:
+        results_dir = ensure_dir(Path(args.results_dir) / f"seed_{args.seed}")
+    else:
+        results_dir = ensure_dir(Path(args.results_dir))
 
     logger.info(
         "Starting evaluation pipeline",
@@ -492,6 +605,9 @@ def main() -> None:
     logger.info("Generating Table 7 (overhead)...")
     t7 = generate_table_7_overhead(run_map["FedAgent-Chain"], results_dir)
 
+    logger.info("Generating Table 5 (agentic AI services)...")
+    t5 = generate_table_5_agents(args.seed, results_dir)
+
     # ── Summary ────────────────────────────────────────────────────────────────
     print(f"\n{'='*65}")
     print(" [OK] Evaluation complete -- all tables computed from checkpoints")
@@ -504,6 +620,10 @@ def main() -> None:
     if not t4.empty:
         print("\nTable 4 -- Blockchain Audit:")
         print(t4.to_string(index=False))
+
+    print("\nTable 5 — Agentic AI Services:")
+    print(t5.to_string(index=False))
+
     print(f"\nResults saved to: {results_dir}")
     print(f"{'='*65}\n")
 
