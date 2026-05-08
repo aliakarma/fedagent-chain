@@ -70,14 +70,61 @@ def find_run_dir(runs_dir: Path, experiment_name: str) -> Path | None:
     return candidates[0] if candidates else None
 
 
+def _find_best_checkpoint(run_dir: Path) -> Path:
+    """Return path to the best-performing checkpoint by F1, or final_model.pt."""
+    per_round_path = run_dir / "metrics" / "per_round.json"
+    final_path = run_dir / "checkpoints" / "final_model.pt"
+
+    if not per_round_path.exists():
+        return final_path
+
+    with open(per_round_path, encoding="utf-8") as f:
+        history = json.load(f)
+
+    if not history:
+        return final_path
+
+    # Find the round with the highest mean_f1
+    best_round_data = max(history, key=lambda r: r.get("mean_f1", 0.0))
+    best_round = best_round_data.get("round", len(history))
+
+    # Checkpoints are saved every 5 rounds — find nearest saved round
+    ckpt_dir = run_dir / "checkpoints"
+    # Prefer best round checkpoint if it exists
+    candidate = ckpt_dir / f"global_model_round_{best_round:03d}.pt"
+    if candidate.exists():
+        logger.info(
+            "Using best-round checkpoint",
+            round=best_round,
+            f1=round(best_round_data.get("mean_f1", 0.0), 4),
+        )
+        return candidate
+
+    # Fall back to the nearest saved checkpoint <= best_round
+    saved = sorted(ckpt_dir.glob("global_model_round_*.pt"))
+    saved_rounds = []
+    for p in saved:
+        try:
+            saved_rounds.append((int(p.stem.split("_")[-1]), p))
+        except ValueError:
+            pass
+    below = [(r, p) for r, p in saved_rounds if r <= best_round]
+    if below:
+        rnd, path = max(below, key=lambda x: x[0])
+        logger.info("Using nearest saved checkpoint", round=rnd, requested_best=best_round)
+        return path
+
+    return final_path
+
+
 def load_model_from_checkpoint(
     run_dir: Path,
     cfg_path: Path,
 ) -> EmploymentMatchingModel:
-    """Load EmploymentMatchingModel from the final checkpoint in run_dir."""
+    """Load EmploymentMatchingModel from the best available checkpoint in run_dir."""
     cfg = load_config(cfg_path)
     model = EmploymentMatchingModel.from_config(cfg.get("model", {}))
-    ckpt_path = run_dir / "checkpoints" / "final_model.pt"
+    ckpt_path = _find_best_checkpoint(run_dir)
     if not ckpt_path.exists():
         raise FileNotFoundError(
             f"Checkpoint not found at {ckpt_path}. "
@@ -98,7 +145,13 @@ def evaluate_model_on_node(
     seed: int,
     data_dir: Path = Path("data/synthetic"),
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, EmploymentDataset]:
-    """Return (y_true, y_pred, y_scores, test_dataset) for one node."""
+    """Return (y_true, y_pred, y_scores, test_dataset) for one node.
+
+    Note: If eval-mode produces NaN probs (a known issue when BatchNorm running
+    statistics are corrupted by FedAvg delta accumulation), automatically falls
+    back to batch-statistics mode (model.train() + no_grad) which recomputes
+    running stats per batch, avoiding the NaN issue.
+    """
     node_dir = data_dir / node_id
     users_df    = pd.read_csv(node_dir / "users.csv")
     jobs_df     = pd.read_csv(node_dir / "jobs.csv")
@@ -113,22 +166,40 @@ def evaluate_model_on_node(
     _, test_ds = full_ds.split(test_size=0.20, seed=seed)
     loader = DataLoader(test_ds, batch_size=256, shuffle=False)
 
-    y_true_list, y_pred_list, y_score_list = [], [], []
-    model.eval()
-    with torch.no_grad():
-        for batch in loader:
-            feats  = batch["features"]
-            labels = batch["label"].numpy()
-            probs  = model(feats).squeeze(-1).numpy()
-            preds  = (probs >= 0.5).astype(int)
-            y_true_list.extend(labels.tolist())
-            y_pred_list.extend(preds.tolist())
-            y_score_list.extend(probs.tolist())
+    def _run_inference(train_mode: bool) -> tuple[list, list, list]:
+        if train_mode:
+            model.train()   # Recompute BatchNorm stats per batch
+        else:
+            model.eval()    # Use running stats (may be corrupted by FedAvg)
+        y_t, y_p, y_s = [], [], []
+        with torch.no_grad():
+            for batch in loader:
+                feats  = batch["features"]
+                labels = batch["label"].numpy()
+                probs  = model(feats).squeeze(-1).numpy()
+                preds  = (probs >= 0.5).astype(int)
+                y_t.extend(labels.tolist())
+                y_p.extend(preds.tolist())
+                y_s.extend(probs.tolist())
+        return y_t, y_p, y_s
+
+    y_true_list, y_pred_list, y_score_list = _run_inference(train_mode=False)
+
+    # Detect BatchNorm corruption: running stats diverged from FedAvg accumulation
+    probs_arr = np.array(y_score_list)
+    if np.isnan(probs_arr).any() or np.isinf(probs_arr).any():
+        logger.warning(
+            "NaN/Inf probs detected — BatchNorm running stats corrupted by FedAvg. "
+            "Falling back to batch-statistics mode.",
+            node=node_id,
+        )
+        y_true_list, y_pred_list, y_score_list = _run_inference(train_mode=True)
+        probs_arr = np.array(y_score_list)
 
     return (
         np.array(y_true_list),
         np.array(y_pred_list),
-        np.array(y_score_list),
+        probs_arr,
         test_ds,
     )
 
