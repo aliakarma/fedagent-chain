@@ -101,8 +101,10 @@ def encode_user_job_pair(
     work_mode_ohe = encode_categorical(
         str(user_row.get("preferred_work_mode", "")), WORK_MODES
     )
-    education_feat = [float(user_row.get("education_level", 0)) / 4.0]  # normalize to [0,1]
-    education_ohe = [0.0] * 4 + education_feat  # pad to 5 dims for consistency
+    edu_level = int(user_row.get("education_level", 0))
+    education_ohe = [0.0] * 5
+    if 0 <= edu_level <= 4:
+        education_ohe[edu_level] = 1.0
 
     goal_ohe = encode_categorical(
         str(user_row.get("employment_goal", "")), EMPLOYMENT_GOALS

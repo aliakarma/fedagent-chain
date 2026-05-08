@@ -119,7 +119,7 @@ pip install -e .
 ### Option C: Docker (Fully Containerized)
 
 ```bash
-git clone https://github.com/fedagent-chain/fedagent-chain.git
+git clone https://github.com/aliakarma/fedagent-chain.git
 cd fedagent-chain
 docker-compose -f docker/docker-compose.yml up --build
 ```
@@ -288,11 +288,10 @@ python scripts/run_federated_simulation.py --config configs/experiment/fedagent_
 
 ```bibtex
 @article{syed2025fedagentchain,
-  title     = {FedAgent-Chain: A Secure Federated and Agentic AI Framework
-               for Multilingual Disability-Inclusive Employment in AI Cities},
-  author    = {Syed, Toqeer Ali and Siddiqui, Muhammad Shoaib and others},
-  journal   = {Frontiers in Artificial Intelligence},
-  year      = {2025},
+  title     = {FedAgent-Chain: A Secure Federated and Agentic AI Framework for Multilingual Disability-Inclusive Employment in AI Cities},
+  author    = {Syed, Toqeer Ali and Siddiqui, Muhammad Shoaib and Ali Akarma},
+  journal   = {},
+  year      = {2026},
   doi       = {10.xxxx/xxxxx}
 }
 ```

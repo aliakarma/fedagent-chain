@@ -68,11 +68,14 @@ class FederatedClient:
         self.logger = get_logger(f"FederatedClient[{node_id}]")
         self.fairness_evaluator = FairnessEvaluator()
 
-        self.local_epochs: int = int(cfg.get("local_epochs", 5))
-        self.batch_size: int = int(cfg.get("batch_size", 64))
-        self.learning_rate: float = float(cfg.get("learning_rate", 0.001))
-        self.C: float = float(cfg.get("privacy", {}).get("clipping_threshold", 1.0))
-        self.sigma: float = float(cfg.get("privacy", {}).get("noise_multiplier", 0.1))
+        fed_cfg     = cfg.get("federated", {})
+        privacy_cfg = cfg.get("privacy", {})
+
+        self.local_epochs:   int   = int(fed_cfg.get("local_epochs",           5))
+        self.batch_size:     int   = int(fed_cfg.get("batch_size",             64))
+        self.learning_rate:  float = float(fed_cfg.get("learning_rate",        0.001))
+        self.C:              float = float(privacy_cfg.get("clipping_threshold", 1.0))
+        self.sigma:          float = float(privacy_cfg.get("noise_multiplier",   0.1))
         self.consent_ref: str = f"consent_{node_id}_v1"
         self.policy_ref: str = f"policy_{node_id}_gdpr"
 
