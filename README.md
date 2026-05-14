@@ -235,6 +235,13 @@ python scripts/generate_figures.py \
 > in federated learning across Non-IID nodes. This prevents the "running stats corruption" issue
 > common with standard FedAvg and BatchNorm. F1/Fairness trade-offs are controlled by `lambda_fairness: 0.5`.
 
+> **Statistical Note**: Performance differences between methods are evaluated 
+> using a paired t-test across 3 independent seeds (42, 123, 2024). With n=3 seeds, 
+> statistical power is limited. Effect sizes (Cohen's d) and confidence intervals 
+> are provided in `experiments/results/table_2_multi_seed_summary.csv`. 
+> Differences with p > 0.05 should be interpreted as directional trends requiring 
+> validation with additional seeds rather than confirmed significant differences.
+
 
 ---
 
