@@ -146,9 +146,9 @@ def main() -> None:
 
     # Load and optionally override config
     cfg = load_config(args.config)
-    for override in args.override:
-        key, _, value = override.partition("=")
-        OmegaConf.update(cfg, key, value, merge=True)
+    if args.override:
+        override_cfg = OmegaConf.from_dotlist(args.override)
+        cfg = OmegaConf.merge(cfg, override_cfg)
 
     # Create run output directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

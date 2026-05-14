@@ -82,6 +82,7 @@ class FederatedClient:
         self.learning_rate:  float = float(fed_cfg.get("learning_rate",        0.001))
         self.C:              float = float(privacy_cfg.get("clipping_threshold", 1.0))
         self.sigma:          float = float(privacy_cfg.get("noise_multiplier",   0.1))
+        self.privacy_enabled: bool = bool(privacy_cfg.get("enabled",             True))
         self.consent_ref: str = f"consent_{node_id}_v1"
         self.policy_ref: str = f"policy_{node_id}_gdpr"
 
@@ -202,15 +203,24 @@ class FederatedClient:
             for name in final_state
         }
 
-        # Apply differential privacy protection
-        # Use a representative flat vector for hashing purposes
-        flat_delta = np.concatenate([v.flatten() for v in delta.values()])
-        protected_delta = protect_state_dict(delta, C=self.C, sigma=self.sigma, seed=seed)
-        flat_protected = np.concatenate([v.flatten() for v in protected_delta.values()])
+        # Apply differential privacy protection to the DELTA (clipping + noise)
+        if self.privacy_enabled:
+            protected_delta = protect_state_dict(delta, C=self.C, sigma=self.sigma, seed=seed)
+        else:
+            self.logger.debug("Privacy disabled, skipping clipping and noise")
+            protected_delta = delta
 
-        # Submit hash to blockchain (ONLY the hash, never the raw update)
+        # Reconstruct DP-protected absolute weights for communication to server
+        # w_k_protected = w_global + Δw̃_k
+        protected_absolute_weights: Dict[str, np.ndarray] = {
+            name: initial_state[name] + protected_delta[name]
+            for name in initial_state
+        }
+
+        # Submit hash to blockchain (ONLY the hash of the PROTECTED DELTA)
+        flat_protected_delta = np.concatenate([v.flatten() for v in protected_delta.values()])
         self.blockchain.submit_model_update_hash(
-            protected_update=flat_protected,
+            protected_update=flat_protected_delta,
             node_id=self.node_id,
             round_number=round_number,
             consent_ref=self.consent_ref,
@@ -231,7 +241,7 @@ class FederatedClient:
             f1=round(metrics.get("f1", 0.0), 4),
         )
 
-        return protected_delta, len(self.train_dataset), metrics
+        return protected_absolute_weights, len(self.train_dataset), metrics
 
     def _evaluate_local(self, model: EmploymentMatchingModel) -> Dict[str, float]:
         """Evaluate the locally trained model on the held-out test dataset.

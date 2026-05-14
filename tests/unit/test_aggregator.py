@@ -75,6 +75,61 @@ class TestFedAvgAggregator:
         result = agg.aggregate([("only_node", state, 500)])
         np.testing.assert_array_almost_equal(result["w"], state["w"])
 
+    def test_aggregate_converges_not_diverges(self):
+        """Verify that applying FedAvg aggregation 20 times does not cause weight norm explosion.
+        This tests that we are averaging absolute weights, not accumulating deltas.
+        """
+        agg = FedAvgAggregator()
+        rng = np.random.default_rng(42)
+
+        # Initialize global state
+        global_state = {
+            "layer.weight": rng.standard_normal((64, 91)).astype(np.float32),
+            "layer.bias": rng.standard_normal(64).astype(np.float32),
+        }
+
+        def get_norm(state):
+            return np.sqrt(sum(np.sum(v**2) for v in state.values()))
+
+        initial_norm = get_norm(global_state)
+
+        # Simulate 20 rounds of FedAvg aggregation
+        for _ in range(20):
+            updates = []
+            for i in range(4):
+                # Simulate local training: add small perturbation to global state
+                local_state = {
+                    name: val + rng.standard_normal(val.shape).astype(np.float32) * 0.01
+                    for name, val in global_state.items()
+                }
+                updates.append((f"node_{i}", local_state, 1000))
+
+            global_state = agg.aggregate(updates)
+
+        final_norm = get_norm(global_state)
+
+        # Weight norm should not explode (averaging should keep it stable)
+        assert final_norm < initial_norm * 2.0, (
+            f"Weight norm exploded from {initial_norm:.4f} to {final_norm:.4f} "
+            f"over 20 FedAvg rounds"
+        )
+
+    def test_aggregate_raises_on_nan_inf(self):
+        """Aggregator should raise ValueError if any input contains NaN or Inf."""
+        agg = FedAvgAggregator()
+        updates = [
+            ("node_0", {"w": np.array([1.0, np.nan], dtype=np.float32)}, 100),
+            ("node_1", {"w": np.array([1.0, 1.0], dtype=np.float32)}, 100),
+        ]
+        with pytest.raises(ValueError, match="NaN or Inf"):
+            agg.aggregate(updates)
+
+        updates_inf = [
+            ("node_0", {"w": np.array([1.0, np.inf], dtype=np.float32)}, 100),
+        ]
+        with pytest.raises(ValueError, match="NaN or Inf"):
+            agg.aggregate(updates_inf)
+
 
 class TestFairnessAwareFedAvgAggregator:
 

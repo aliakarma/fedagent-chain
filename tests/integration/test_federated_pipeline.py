@@ -131,16 +131,46 @@ class TestFederatedPipelineIntegration:
         assert "best_f1" in results
         assert results["convergence_rounds"] == 2
 
-    def test_local_training_delta_is_not_zero(self, small_cfg, two_node_clients):
-        """Clients should produce non-trivial model updates after local training."""
+    def test_local_training_updates_weights(self, small_cfg, two_node_clients):
+        """Clients should produce non-trivial model updates (different from global state) after local training."""
         clients, blockchain = two_node_clients
         model = EmploymentMatchingModel.from_config(small_cfg.model)
         global_state = model.get_state_dict_numpy()
-        delta, n_samples, metrics = clients[0].train_round(
+        protected_weights, n_samples, metrics = clients[0].train_round(
             global_state=global_state, round_number=1, seed=42
         )
-        flat_delta = np.concatenate([v.flatten() for v in delta.values()])
-        assert np.linalg.norm(flat_delta) > 0.0
+        # Check if protected weights differ from global state
+        any_diff = any(
+            not np.allclose(protected_weights[k], global_state[k])
+            for k in global_state
+        )
+        assert any_diff
+
+    def test_fedavg_loss_does_not_diverge(self, small_cfg, two_node_clients):
+        """Critical: FedAvg loss must not increase monotonically (indicates delta accumulation bug)."""
+        clients, blockchain = two_node_clients
+        small_cfg.federated.n_rounds = 10
+        small_cfg.federated.local_epochs = 2
+        small_cfg.federated.min_clients = 2
+        server = FederatedServer(small_cfg, use_fairness_aggregation=False, output_dir="/tmp/test_convergence")
+
+        round_losses = []
+        for rnd in range(1, 11):
+            metrics = server.run_round(clients, round_num=rnd, seed=42)
+            round_losses.append(metrics.get("mean_train_loss", float("inf")))
+
+        # Loss at round 10 must not be more than 5x the loss at round 1 (very generous bound)
+        loss_ratio = round_losses[-1] / (round_losses[0] + 1e-8)
+        assert loss_ratio < 5.0, (
+            f"FedAvg loss diverged: round 1={round_losses[0]:.4f}, "
+            f"round 10={round_losses[-1]:.4f}, ratio={loss_ratio:.2f}. "
+            f"Full history: {[round(x, 4) for x in round_losses]}"
+        )
+
+        # Additionally, final loss should not exceed 5.0 for binary classification
+        assert round_losses[-1] < 5.0, (
+            f"FedAvg BCE loss={round_losses[-1]:.4f} at round 10 is unreasonably high."
+        )
 
     def test_consent_filter_applied(self, small_cfg, two_node_clients):
         """Dataset should contain fewer samples than raw data due to consent filtering."""

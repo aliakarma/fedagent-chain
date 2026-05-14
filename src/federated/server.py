@@ -191,25 +191,37 @@ class FederatedServer:
 
         # Phase 1: Local training at each node
         for client in clients:
-            delta, n_samples, metrics = client.train_round(
+            weights, n_samples, metrics = client.train_round(
                 global_state=self.global_state.copy(),
                 round_number=round_num,
                 seed=seed,
             )
-            updates.append((client.node_id, delta, n_samples))
+            updates.append((client.node_id, weights, n_samples))
             node_metrics[client.node_id] = metrics
             fairness_scores[client.node_id] = metrics.get("min_group_f1", 0.5)
 
         # Phase 2: Fairness-aware aggregation
         if self.use_fairness and isinstance(self.aggregator, FairnessAwareFedAvgAggregator):
-            aggregated_delta = self.aggregator.aggregate(updates, fairness_scores)
+            aggregated_weights = self.aggregator.aggregate(updates, fairness_scores)
         else:
-            aggregated_delta = self.aggregator.aggregate(updates)
+            aggregated_weights = self.aggregator.aggregate(updates)
 
-        # Phase 3: Apply aggregated delta to global model
+        # Phase 3: Update global model state (absolute weights)
         for name in self.global_state:
-            if name in aggregated_delta:
-                self.global_state[name] = self.global_state[name] + aggregated_delta[name]
+            if name in aggregated_weights:
+                self.global_state[name] = aggregated_weights[name].copy()
+            else:
+                logger.warning("Parameter missing from aggregation", param=name)
+
+        # Convergence diagnostics
+        total_weight_norm = float(np.sqrt(sum(
+            np.sum(v ** 2) for v in self.global_state.values()
+        )))
+        logger.info(
+            "Global model weight norm",
+            round=round_num,
+            weight_norm=round(total_weight_norm, 4),
+        )
 
         # Aggregate round metrics across nodes
         round_summary: Dict = {}
@@ -228,6 +240,19 @@ class FederatedServer:
             nid: {k: round(v, 4) for k, v in m.items() if isinstance(v, float)}
             for nid, m in node_metrics.items()
         }
+
+        # Loss explosion detection
+        mean_loss = round_summary.get("mean_train_loss", 0.0)
+        if mean_loss > 50.0:
+            logger.error(
+                "LOSS EXPLOSION DETECTED",
+                round=round_num,
+                mean_train_loss=round(mean_loss, 4),
+            )
+            raise RuntimeError(
+                f"Training halted: mean_train_loss={mean_loss:.2f} "
+                f"exceeds explosion threshold of 50.0 at round {round_num}."
+            )
 
         return round_summary
 

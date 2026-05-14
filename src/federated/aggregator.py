@@ -53,17 +53,17 @@ class FedAvgAggregator:
     def aggregate(
         self, updates: List[Tuple[str, Dict[str, np.ndarray], int]]
     ) -> Dict[str, np.ndarray]:
-        """Aggregate local model updates via weighted average.
+        """Aggregate local absolute model weights via weighted average.
 
         Parameters
         ----------
-        updates : list of (node_id, state_dict, n_samples)
-            Local model updates from each participating node.
+        updates : list of (node_id, absolute_weights, n_samples)
+            Local model absolute weights from each participating node.
 
         Returns
         -------
         dict
-            Aggregated global model state dict.
+            Aggregated global model absolute weight state dict.
 
         Raises
         ------
@@ -72,6 +72,15 @@ class FedAvgAggregator:
         """
         if not updates:
             raise ValueError("Cannot aggregate: updates list is empty.")
+
+        # Defensive check: ensure no NaN/Inf in input weights
+        for node_id, state_dict, _ in updates:
+            for p_name, p_val in state_dict.items():
+                if np.any(np.isnan(p_val)) or np.any(np.isinf(p_val)):
+                    raise ValueError(
+                        f"NaN or Inf detected in state_dict from node '{node_id}', "
+                        f"parameter '{p_name}'. Indicates DP noise or accumulation corruption."
+                    )
 
         weights = self.compute_weights(updates)
         _, first_state, _ = updates[0]
@@ -189,19 +198,19 @@ class FairnessAwareFedAvgAggregator(FedAvgAggregator):
         updates: List[Tuple[str, Dict[str, np.ndarray], int]],
         fairness_scores: Dict[str, float] | None = None,
     ) -> Dict[str, np.ndarray]:
-        """Aggregate with fairness-adjusted weights.
+        """Aggregate absolute weights with fairness-adjusted weights.
 
         Parameters
         ----------
-        updates : list of (node_id, state_dict, n_samples)
-            Local model updates.
+        updates : list of (node_id, absolute_weights, n_samples)
+            Local model absolute weights.
         fairness_scores : dict, optional
             Per-node fairness scores for weight adjustment.
 
         Returns
         -------
         dict
-            Aggregated global model state dict.
+            Aggregated global model absolute weight state dict.
         """
         if not updates:
             raise ValueError("Cannot aggregate: updates list is empty.")
