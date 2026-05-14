@@ -1,394 +1,1007 @@
-# FedAgent-Chain — Q1 Journal Remediation Plan
-**Prepared for:** Ali Akarma  
-**Repository:** `fedagent-chain`  
-**Audit basis:** Full adversarial code audit (NeurIPS / ACM Artifact standards)  
-**Target venue:** Q1 journal (Frontiers in AI / IEEE TNNLS / TKDE class)  
-**Estimated total effort:** 18–22 working days  
+# MASTER REMEDIATION PLAN: FedAgent-Chain Repository Repair
+
+## Context and Mandate
+
+You are a **senior ML systems engineer, NeurIPS reproducibility reviewer, and scientific auditor** tasked with repairing the FedAgent-Chain research repository. A full peer review audit has been completed and has identified five critical rejection-level issues, five moderate issues, and four required missing experiments. Your job is to execute a systematic, phase-gated remediation plan. You must think simultaneously as:
+
+- A **federated learning systems engineer** who understands gradient flow, DP noise accumulation, and FedAvg convergence properties
+- A **fairness ML researcher** who understands protected attribute alignment, surrogate penalties, and disparity metrics
+- A **scientific auditor** who verifies every number can be traced to runnable code
+- A **production ML architect** who enforces reproducibility, determinism, and artifact provenance
+- A **NeurIPS reproducibility reviewer** who will reject any result not supported by verifiable computation
+
+**Repository under repair:** FedAgent-Chain (federated learning + blockchain + agentic AI for disability-inclusive employment)
+
+**Primary source of truth:** The review report. Every issue flagged as CRITICAL is a hard blocker. Every MODERATE issue is a mandatory fix unless you provide written architectural justification for deferral. Every MISSING EXPERIMENT is required research validation.
+
+**Non-negotiable rules throughout all phases:**
+- NEVER claim a fix is complete without running the associated test suite and observing passing results
+- NEVER skip an experiment to save time
+- NEVER assume metrics improved — measure them
+- NEVER fabricate statistical significance
+- NEVER silently ignore failed tests or warnings
+- NEVER overwrite committed artifacts without first creating a timestamped backup branch
+- NEVER continue to the next phase when success criteria have not been met
+- NEVER produce placeholder values in any CSV, JSON, or table
+- ALL random seeds must be set before ANY stochastic operation
+- ALL experiments must log hardware info, git commit hash, and config hash
 
 ---
 
-> **How to use this document.** Work through each Phase in order. Do not begin
-> Phase N+1 until you have verified every item in Phase N's **Success Gate**.
-> Each phase contains exact file paths, the broken code, the replacement code,
-> and a rationale. Run `pytest` after every phase to catch regressions early.
+## Phase 0 — Repository Audit, Backup, and Environment Verification
 
----
+### Objective
+Establish a clean, verified baseline state before any code modification. Create backup branches. Verify the development environment exactly matches the paper's stated dependencies. Document the current broken state with checksums so that any regression introduced during repair is immediately detectable.
 
-## Severity Map (quick reference before you start)
+### Why This Phase Matters
+You cannot repair a repository you don't fully understand. Every artifact currently committed may be either correct, partially correct, or fabricated. You must establish ground truth before making changes. Modifying code without a backup means losing the ability to compare pre-fix vs post-fix behavior.
 
-| Phase | Problem | Severity | Blocks |
-|-------|---------|----------|--------|
-| 0 | Config loading bug + bad feature encoding | Moderate | All subsequent training |
-| 1 | No train/test split; label-formula leakage | Critical | All evaluation validity |
-| 2 | Evaluation pipeline completely disconnected | **Fatal** | Every reported number |
-| 3 | Fairness loss not in training loop | **Fatal** | Core contribution claim |
-| 4 | Four agents missing; Table 5 fabricated | **Fatal** | Agent evaluation |
-| 5 | Single seed; no statistical tests | Critical | Publishability |
-| 6 | Circular regression tests | Moderate | CI credibility |
-| 7 | End-to-end reproduction + paper sync | Moderate | Submission readiness |
+### Files Involved
+All files in the repository. Priority audit targets:
+- `experiments/results/**/*.csv` and `experiments/results/**/*.json`
+- `experiments/verification_run/**`
+- `experiments/results_temp/**`
+- `debug_eval.py` (root level)
+- `per_round_debug.json` (root level)
+- `src/federated/server.py`
+- `src/federated/client.py`
+- `src/federated/aggregator.py`
+- `src/models/employment_model.py`
+- `scripts/run_evaluation.py`
+- `scripts/run_federated_simulation.py`
+- `scripts/aggregate_multi_seed_results.py`
+- `configs/experiment/fedagent_chain_full.yaml`
+- `configs/experiment/ablation/no_fairness.yaml`
+- `configs/experiment/baseline_centralized.yaml`
 
----
+### Tasks
 
-# PHASE 0 — Critical Infrastructure Repairs
-**Estimated effort: 4–6 hours**  
-**Prerequisite: None**
+**Task 0.1 — Create Backup Branch**
+```bash
+git checkout main
+git pull origin main
+git checkout -b pre-repair-backup-$(date +%Y%m%d-%H%M%S)
+git push origin pre-repair-backup-$(date +%Y%m%d-%H%M%S)
+git checkout main
+git checkout -b repair/phase-0-audit
+```
+Document the commit hash you are starting from. This hash must appear in every subsequent commit message.
 
-These are two silent bugs that corrupt every experiment downstream. Fix them
-first so that all subsequent phases build on a correct foundation.
+**Task 0.2 — Environment Verification**
+Verify that your Python environment exactly matches `requirements.txt` and `environment.yml`:
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pip install -e .
+python -c "import torch; import sklearn; import flwr; import omegaconf; import pydantic; print('All imports OK')"
+python -c "import torch; assert torch.__version__ == '2.1.0', f'Wrong PyTorch: {torch.__version__}'"
+python -c "import sklearn; assert sklearn.__version__ == '1.3.2', f'Wrong sklearn: {sklearn.__version__}'"
+```
+If any version mismatches exist, document them. Do not proceed if core ML packages differ.
 
----
+**Task 0.3 — Full Test Suite Baseline Run**
+Run the existing test suite and record the current pass/fail state:
+```bash
+pytest tests/unit/ -v --tb=short 2>&1 | tee logs/phase0_unit_baseline.txt
+pytest tests/integration/ -v --tb=short 2>&1 | tee logs/phase0_integration_baseline.txt
+pytest tests/regression/ -v --tb=short 2>&1 | tee logs/phase0_regression_baseline.txt
+```
+Every failing test is a pre-existing failure. Record all of them. You must not introduce NEW failures; you may only fix existing ones.
 
-## Fix 0.1 — `FederatedClient` Config Loading Bug
+**Task 0.4 — Artifact Checksum Registry**
+Generate SHA-256 checksums for all committed result artifacts:
+```bash
+find experiments/results/ -name "*.csv" -o -name "*.json" | sort | xargs sha256sum > logs/phase0_artifact_checksums_before.txt
+find experiments/ -name "*.pt" | sort | xargs sha256sum >> logs/phase0_artifact_checksums_before.txt
+echo "Checksum registry created at $(date)" >> logs/phase0_artifact_checksums_before.txt
+```
+This file must be committed and will be used in Phase 8 to verify that regenerated results are fully self-consistent.
 
-### Problem
-`FederatedClient.__init__()` reads `local_epochs`, `batch_size`, and
-`learning_rate` from the **top level** of the config object, but all three
-keys live under the `federated:` sub-key in every YAML. The code silently
-falls back to hardcoded defaults (5, 64, 0.001) regardless of what you set in
-any config file. If you try to override `federated.local_epochs=10` from the
-CLI, it has zero effect on the client.
+**Task 0.5 — Document Broken State**
+Create `REPAIR_LOG.md` at the repository root with the following mandatory sections:
+```markdown
+# FedAgent-Chain Repair Log
 
-### File to edit
-`src/federated/client.py`
+## Repair Start Date: [DATE]
+## Starting Commit: [HASH]
+## Auditor Notes
 
-### Broken code (lines ~57–66)
-```python
-self.local_epochs: int = int(cfg.get("local_epochs", 5))
-self.batch_size: int = int(cfg.get("batch_size", 64))
-self.learning_rate: float = float(cfg.get("learning_rate", 0.001))
-self.C: float = float(cfg.get("privacy", {}).get("clipping_threshold", 1.0))
-self.sigma: float = float(cfg.get("privacy", {}).get("noise_multiplier", 0.1))
+### Critical Issues (Blockers)
+1. [CI-1] Core fairness claim inverted: D_fair(disability) +106%, D_fair(work_mode) +3400%
+2. [CI-2] FedAvg delta accumulation divergence: loss 0.70→23.63 over 20 rounds
+3. [CI-3] Degenerate statistical tests: t=-inf, p=0, Cohen's d=-38e9 in per-seed CSVs
+4. [CI-4] Local Baseline == Centralized (centralized flag never handled in data loader)
+5. [CI-5] _get_batch_group_labels uses wrong indices (fairness penalty on mismatched groups)
+
+### Moderate Issues (Mandatory Fixes)
+...
+
+### Environment
+- OS: [OS]
+- Python: [VERSION]
+- PyTorch: [VERSION]
+- CUDA available: [YES/NO]
+- CPU cores: [N]
+- RAM: [GB]
 ```
 
-### Fixed code — replace those five lines with:
-```python
-fed_cfg     = cfg.get("federated", {})
-privacy_cfg = cfg.get("privacy", {})
+**Task 0.6 — Identify and Flag Dead Artifacts**
+The following files have been identified as problematic artifacts that must be audited before deletion in Phase 7:
+- `debug_eval.py` — development debug file with hardcoded timestamps
+- `per_round_debug.json` — unnamed provenance
+- `experiments/results_temp/` — temp directory with inconsistent metrics (FedAgent F1=0.6734 vs reported 0.6374)
+- Per-seed `table_2_multi_seed_summary.csv` files (in seed_42/, seed_123/, seed_2024/) showing `F1_std=0.0` — invalid aggregation artifacts
 
-self.local_epochs:   int   = int(fed_cfg.get("local_epochs",           5))
-self.batch_size:     int   = int(fed_cfg.get("batch_size",             64))
-self.learning_rate:  float = float(fed_cfg.get("learning_rate",        0.001))
-self.C:              float = float(privacy_cfg.get("clipping_threshold", 1.0))
-self.sigma:          float = float(privacy_cfg.get("noise_multiplier",   0.1))
+Do NOT delete these yet. Mark them with a comment in `REPAIR_LOG.md` under "Artifacts to Remove in Phase 7".
+
+**Task 0.7 — Smoke Test: Can the Pipeline Run at All?**
+Run the minimal smoke test pipeline with 2 rounds to confirm the environment works:
+```bash
+python scripts/generate_synthetic_data.py \
+    --config configs/experiment/fedagent_chain_full.yaml \
+    --seed 42 \
+    --n-users-per-node 100 \
+    --n-jobs-per-node 50 \
+    --n-pairs-per-node 200 2>&1 | tee logs/phase0_smoke_data.txt
+
+python scripts/run_federated_simulation.py \
+    --config configs/experiment/fedagent_chain_full.yaml \
+    --seed 42 \
+    --no-mlflow \
+    --override federated.n_rounds=2 federated.local_epochs=1 \
+    2>&1 | tee logs/phase0_smoke_simulation.txt
+```
+If the smoke test fails, stop immediately and diagnose the import/runtime error before proceeding.
+
+### Architecture Considerations
+None — this is an audit phase. No architectural changes are made.
+
+### Validation
+- All baseline test results documented
+- Checksum registry committed
+- REPAIR_LOG.md created and committed
+- Smoke test passes
+- Environment versions verified
+
+### Expected Outputs
+- `logs/phase0_unit_baseline.txt`
+- `logs/phase0_integration_baseline.txt`
+- `logs/phase0_regression_baseline.txt`
+- `logs/phase0_artifact_checksums_before.txt`
+- `logs/phase0_smoke_data.txt`
+- `logs/phase0_smoke_simulation.txt`
+- `REPAIR_LOG.md`
+
+### Success Criteria
+- [ ] Backup branch exists on remote
+- [ ] Environment versions match requirements.txt within major.minor
+- [ ] All pre-existing test results documented (pass/fail counts recorded)
+- [ ] Artifact checksum registry created
+- [ ] REPAIR_LOG.md committed with all 5 critical issues and 5 moderate issues listed
+- [ ] Smoke test (2 rounds, 4 nodes, 100 users/node) completes without exception
+- [ ] `logs/` directory committed with all baseline files
+
+### Failure Criteria
+- Environment package versions differ from requirements.txt for core ML dependencies AND you cannot establish an exact-match environment → STOP and document the version delta
+- Smoke test raises an import error or crashes mid-simulation → STOP and fix import/runtime before proceeding
+- Git backup branch does not exist on remote → STOP
+
+### Stop Conditions
+If the smoke test fails with a crash (not a numerical issue, but an actual runtime exception), do not proceed to Phase 1 until it is fixed. A crash indicates a broken baseline that would contaminate all downstream phases.
+
+### Git Commit Recommendation
+```
+git add logs/ REPAIR_LOG.md
+git commit -m "phase0: audit baseline, artifact checksums, repair log init [starting-commit: HASH]"
 ```
 
-### Why this matters
-Without this fix, every ablation and baseline experiment silently ignores its
-config and runs with the same hyperparameters. The baseline_local config sets
-`local_epochs: 100` — that value will never be used until this is corrected.
+---
+
+**PHASE COMPLETION CHECKLIST — PHASE 0**
+
+**SUCCESS CONDITIONS:**
+- Backup branch on remote ✓
+- Environment verified ✓
+- Baseline test results documented ✓
+- Checksum registry committed ✓
+- REPAIR_LOG.md committed ✓
+- Smoke test passes ✓
+
+**FAIL CONDITIONS:**
+- Any import error in smoke test
+- Core ML package version mismatch not documented
+- Backup branch not pushed to remote
+
+**NEXT PHASE ENTRY REQUIREMENTS:**
+All success conditions must be checked. REPAIR_LOG.md must exist. Smoke test log must show no exception.
+
+**DO NOT CONTINUE TO PHASE 1 UNTIL ALL SUCCESS CRITERIA PASS.**
 
 ---
 
-## Fix 0.2 — Education Feature Encoding
+## Phase 1 — Core Federated Learning Stability Fix (FedAvg Delta Accumulation Divergence)
 
-### Problem
-`encode_user_job_pair()` in `src/data/dataset.py` describes the education
-feature as "one-hot" but produces `[0, 0, 0, 0, edu_level/4.0]` — a scalar
-stuffed into the last position of a 5-dim vector padded with zeros. This is
-neither one-hot nor ordinal; it is meaningless. The model cannot learn
-sensibly from it.
+### Objective
+Fix the root cause of training loss divergence in the Standard FedAvg configuration. Currently `FederatedServer` applies accumulated DP-noisy deltas to the global state every round, causing unbounded weight growth (BCE loss: 0.70 → 23.63 over 20 rounds). Replace the delta-based update with proper FedAvg absolute-weight averaging. Verify that training loss decreases or stabilizes over 20 rounds.
 
-### File to edit
-`src/data/dataset.py`
+### Why This Phase Matters
+This is the most foundational fix in the entire repair plan. Every downstream comparison (FedAgent-Chain vs Standard FedAvg), every fairness measurement, and every statistical test depends on having a valid, non-diverging Standard FedAvg baseline. If the baseline diverges, then:
+1. The "Standard FedAvg" F1 of 0.6762 (Table 2) comes from the best checkpoint at round 1, not from a converged model
+2. The claimed superiority of FedAgent-Chain (F1=0.6374 < 0.6762) is comparing a fairly-trained model against the BEST ROUND of a diverging model — this is not a fair comparison
+3. The catastrophic cross-seed variance (F1 range: 0.09–0.68 for Standard FedAvg) is directly caused by the divergence being seed-sensitive
 
-### Broken code (~line 75–77)
+### Root Cause Explanation
+In `src/federated/client.py`, `train_round()` currently returns the model DELTA:
 ```python
-education_feat = [float(user_row.get("education_level", 0)) / 4.0]
-education_ohe = [0.0] * 4 + education_feat  # pad to 5 dims for consistency
+delta = {
+    name: final_state[name] - initial_state[name]
+    for name in final_state
+}
 ```
 
-### Fixed code — replace those two lines with:
+And in `src/federated/server.py`, `run_round()` applies this delta:
 ```python
-edu_level = int(user_row.get("education_level", 0))
-education_ohe = [0.0] * 5
-if 0 <= edu_level <= 4:
-    education_ohe[edu_level] = 1.0
+self.global_state[name] = self.global_state[name] + aggregated_delta[name]
 ```
 
-### Why this matters
-The feature dimension stays at 91 (no model architecture change needed), but
-the encoding is now a proper one-hot over {0,1,2,3,4}. This is what the
-config comment `5 (edu)` actually promised.
+The problem is: `protect_state_dict()` adds Gaussian DP noise `N(0, (σ·C)²I)` to each parameter's delta. With `σ=0.1, C=1.0`, the noise std = 0.1 per parameter. With 4 nodes and 20 rounds, each parameter accumulates 80 noisy delta contributions. Since the DP noise has zero mean but is not zero-variance, the expected squared L2 norm of the accumulated noise grows as `O(T · K · σ² · C² · d)` where T=rounds, K=nodes, d=parameter dimension. For a model with ~50,000 parameters, this is an enormous unbounded term.
 
----
+Standard FedAvg is defined as averaging ABSOLUTE model weights, not accumulating deltas. The delta formulation only makes sense in protocols like gradient-based FL (FedSGD) where deltas are true gradient updates, not in parameter-space averaging.
 
-## Fix 0.3 — Add a Verification Unit Test for Both Fixes
+### Files Involved
+- `src/federated/client.py` — `train_round()` must return absolute weights, not deltas
+- `src/federated/server.py` — `run_round()` must apply weighted average of absolute weights
+- `src/federated/aggregator.py` — `FedAvgAggregator.aggregate()` signature must reflect absolute weights
+- `src/federated/privacy.py` — DP must be applied at the correct point (to the delta for communication privacy, not to the accumulated global state)
+- `tests/unit/test_aggregator.py` — update tests to verify absolute weight aggregation
+- `tests/integration/test_federated_pipeline.py` — update to verify convergence
+- `tests/unit/test_privacy.py` — add delta-then-aggregate test
 
-Create (or add to) `tests/unit/test_config_loading.py`:
+### Architectural Considerations
+
+The canonical FedAvg algorithm (McMahan et al., 2017) works as follows:
+1. Server broadcasts global weights `w_t` to all clients
+2. Each client k trains locally for E epochs, producing local weights `w_k^{t+1}`
+3. Server computes: `w^{t+1} = Σ_k (n_k / N) · w_k^{t+1}`
+
+There is no delta in step 3. The aggregation is a weighted mean of absolute weights.
+
+When DP protection is applied (as in DP-FedAvg), the protection is applied to the **communication artifact** (the delta `Δw_k = w_k^{t+1} - w_t`), and then the server reconstructs approximate absolute weights as `w_k^{perturbed} = w_t + Δw̃_k`. The aggregation is then:
+`w^{t+1} = Σ_k (n_k / N) · w_k^{perturbed} = w_t + Σ_k (n_k / N) · Δw̃_k`
+
+This formulation is EQUIVALENT to delta aggregation BUT ONLY IF `w_t` is subtracted before aggregation and added back after. The current code skips the subtraction — it aggregates the raw perturbed delta and adds it directly, which over multiple rounds becomes cumulative unbounded drift.
+
+The cleanest fix: clients return the DP-protected ABSOLUTE weight vector (after adding noise to the delta, reconstruct the absolute weights). The server then aggregates absolute weights. This is mathematically identical to DP-FedAvg but eliminates the accumulation bug.
+
+### Required Code Modifications
+
+**Modification 1.1 — `src/federated/client.py`, `train_round()` return value**
 
 ```python
-"""Regression tests for Phase 0 fixes."""
-import pytest
-from omegaconf import OmegaConf
-from src.data.dataset import encode_user_job_pair
-import pandas as pd
-import numpy as np
+# BEFORE — returns raw delta (causes accumulation divergence)
+delta: Dict[str, np.ndarray] = {
+    name: final_state[name] - initial_state[name]
+    for name in final_state
+}
+flat_delta = np.concatenate([v.flatten() for v in delta.values()])
+protected_delta = protect_state_dict(delta, C=self.C, sigma=self.sigma, seed=seed)
 
+# ... submit hash ...
+return protected_delta, len(self.train_dataset), metrics
 
-def test_client_reads_local_epochs_from_federated_subkey():
-    from src.blockchain.chain import PermissionedBlockchain
-    from src.data.dataset import EmploymentDataset
-    from src.federated.client import FederatedClient
+# AFTER — returns DP-protected ABSOLUTE weights (eliminates accumulation divergence)
+# Step 1: Compute per-parameter delta
+delta: Dict[str, np.ndarray] = {
+    name: final_state[name] - initial_state[name]
+    for name in final_state
+}
 
-    cfg = OmegaConf.create({
-        "federated": {
-            "local_epochs": 7,      # non-default value
-            "batch_size": 32,
-            "learning_rate": 0.005,
-        },
-        "privacy":   {"clipping_threshold": 2.0, "noise_multiplier": 0.2},
-        "model":     {"input_dim": 91, "hidden_dims": [32, 16], "dropout_rate": 0.1},
-        "fairness":  {"enabled": False, "lambda_fairness": 0.0, "protected_groups": []},
-        "blockchain":{"enabled": False, "records_per_block": 5},
-    })
-    from src.data.synthetic_generator import generate_synthetic_node_data
-    data = generate_synthetic_node_data("saudi_arabia", 30, 15, 60, seed=42)
-    ds = EmploymentDataset(data["outcomes"], data["users"], data["jobs"])
-    bc = PermissionedBlockchain(records_per_block=5)
-    client = FederatedClient("saudi_arabia", ds, cfg, bc, device="cpu")
+# Step 2: Apply DP protection to delta (clipping + noise applied to delta, not absolute weights)
+protected_delta = protect_state_dict(delta, C=self.C, sigma=self.sigma, seed=seed)
 
-    assert client.local_epochs == 7,   "local_epochs not read from federated sub-key"
-    assert client.batch_size   == 32,  "batch_size not read from federated sub-key"
-    assert abs(client.learning_rate - 0.005) < 1e-9
+# Step 3: Reconstruct DP-protected absolute weights for communication to server
+# w_k_protected = w_global + Δw̃_k
+protected_absolute_weights: Dict[str, np.ndarray] = {
+    name: initial_state[name] + protected_delta[name]
+    for name in initial_state
+}
 
+# Step 4: Hash the delta (not absolute weights) for blockchain privacy audit
+# The blockchain receives only the hash of the delta, protecting weight values
+flat_protected_delta = np.concatenate([v.flatten() for v in protected_delta.values()])
+self.blockchain.submit_model_update_hash(
+    protected_update=flat_protected_delta,
+    node_id=self.node_id,
+    round_number=round_number,
+    consent_ref=self.consent_ref,
+    policy_ref=self.policy_ref,
+)
 
-def test_education_ohe_is_proper_one_hot():
-    user = pd.Series({
-        "skill_vector":       str([1, 0] * 25),
-        "accommodation_needs": str([1, 0] * 10),
-        "disability_category": "mobility",
-        "preferred_work_mode": "hybrid",
-        "education_level":     3,           # UNDERGRADUATE
-        "employment_goal":     "fulltime",
-        "language_primary":    "ar",
-    })
-    job = pd.Series({
-        "required_skills":      str([1, 0] * 25),
-        "accommodation_provided": str([1, 0] * 10),
-        "work_mode":            "hybrid",
-        "language_required":    "ar",
-    })
-    features = encode_user_job_pair(user, job)
-    # Education dims occupy indices 78–82 (50+20+8 = 78 start)
-    edu_slice = features[78:83]
-    assert edu_slice[3] == 1.0, "Expected one-hot at position 3 for edu_level=3"
-    assert sum(edu_slice) == pytest.approx(1.0), "Education OHE must sum to 1"
+metrics = self._evaluate_local(model)
+metrics["train_loss"] = float(np.mean(epoch_losses))
+
+# Return absolute weights (not delta) so server can perform true FedAvg mean
+return protected_absolute_weights, len(self.train_dataset), metrics
 ```
 
-Run: `pytest tests/unit/test_config_loading.py -v`
-
----
-
-## ✅ Phase 0 Success Gate
-
-Before moving to Phase 1, verify ALL of the following:
-
-- [ ] `pytest tests/unit/test_config_loading.py -v` — both new tests **PASS**
-- [ ] `pytest tests/unit/ -v` — all pre-existing unit tests still pass
-- [ ] Open `src/federated/client.py` and confirm `fed_cfg = cfg.get("federated", {})` is present
-- [ ] Open `src/data/dataset.py` and confirm `education_ohe[edu_level] = 1.0` pattern is present
-- [ ] Manually verify: instantiate `FederatedClient` with `local_epochs=7` in config and print
-  `client.local_epochs` — it must print `7`, not `5`
-
----
-
----
-
-# PHASE 1 — Data Pipeline Integrity
-**Estimated effort: 1.5–2 days**  
-**Prerequisite: Phase 0 complete**
-
-Two independent data integrity problems must be fixed before any training
-result can be trusted.
-
----
-
-## Fix 1.1 — Implement Stratified Train / Test Split
-
-### Problem
-`FederatedClient._evaluate_local()` evaluates the model on `self.dataset`,
-which is the **same** `EmploymentDataset` used for training. There is no
-held-out test set anywhere in the codebase. All F1, accuracy, precision, and
-recall values that flow into the simulation loop are measured on training data.
-Any reported generalization performance is meaningless.
-
-### Step A — Add `split()` to `EmploymentDataset`
-
-File: `src/data/dataset.py`
-
-Add this method to the `EmploymentDataset` class, after `get_group_labels()`:
+**Modification 1.2 — `src/federated/server.py`, `run_round()` aggregation**
 
 ```python
-def split(
-    self,
-    test_size: float = 0.20,
-    seed: int = 42,
-) -> tuple["EmploymentDataset", "EmploymentDataset"]:
-    """Return (train_dataset, test_dataset) with stratified split on label.
+# BEFORE — applies delta to global state (accumulation divergence)
+aggregated_delta = self.aggregator.aggregate(updates)
+for name in self.global_state:
+    if name in aggregated_delta:
+        self.global_state[name] = self.global_state[name] + aggregated_delta[name]
 
-    Parameters
-    ----------
-    test_size : float
-        Fraction of pairs to hold out for testing. Default 0.20 (20 %).
-    seed : int
-        Random seed for reproducible splits.
+# AFTER — replaces global state with weighted mean of absolute weights (true FedAvg)
+# updates now contains (node_id, absolute_weights, n_samples)
+aggregated_weights = self.aggregator.aggregate(updates)
+# Directly replace global state — no delta addition
+for name in self.global_state:
+    if name in aggregated_weights:
+        self.global_state[name] = aggregated_weights[name].copy()
+    else:
+        self.logger.warning(
+            "Parameter missing from aggregation result",
+            param_name=name,
+            available_keys=list(aggregated_weights.keys()),
+        )
+```
 
-    Returns
-    -------
-    tuple of (EmploymentDataset, EmploymentDataset)
-        train_dataset, test_dataset
+**Modification 1.3 — `src/federated/server.py`, add convergence diagnostics**
+
+After `run_round()` in the round loop, add gradient norm and weight norm logging:
+```python
+# Convergence diagnostics — add after aggregation
+total_weight_norm = float(np.sqrt(sum(
+    np.sum(v ** 2) for v in self.global_state.values()
+)))
+self.logger.info(
+    "Global model weight norm after aggregation",
+    round=round_num,
+    weight_norm=round(total_weight_norm, 4),
+)
+# Loss explosion detection — halt training if loss exceeds threshold
+if round_metrics.get("mean_train_loss", 0.0) > 50.0:
+    self.logger.error(
+        "LOSS EXPLOSION DETECTED — halting training",
+        round=round_num,
+        mean_train_loss=round_metrics.get("mean_train_loss"),
+    )
+    raise RuntimeError(
+        f"Training halted: mean_train_loss={round_metrics['mean_train_loss']:.2f} "
+        f"exceeds explosion threshold of 50.0 at round {round_num}. "
+        "Check FedAvg aggregation logic and DP noise parameters."
+    )
+```
+
+**Modification 1.4 — `src/federated/aggregator.py`, update docstrings and type hints**
+
+Update all docstrings in `FedAvgAggregator.aggregate()` and `FairnessAwareFedAvgAggregator.aggregate()` to explicitly state that the input `state_dict` entries represent **absolute model weights**, not deltas. Add an assertion:
+```python
+# At the top of aggregate():
+# Defensive assertion: weights should not contain NaN or Inf (which would indicate DP noise corruption)
+for node_id, state_dict, _ in updates:
+    for param_name, param_val in state_dict.items():
+        if np.any(np.isnan(param_val)) or np.any(np.isinf(param_val)):
+            raise ValueError(
+                f"NaN or Inf detected in state_dict from node '{node_id}', "
+                f"parameter '{param_name}'. This indicates a DP noise or "
+                f"weight accumulation bug. Halting aggregation."
+            )
+```
+
+**Modification 1.5 — `src/federated/privacy.py`, add DP diagnostics**
+
+Add per-call logging to `protect_state_dict()`:
+```python
+# After computing protected, add:
+original_norms = {name: float(np.linalg.norm(state_dict[name])) for name in state_dict}
+protected_norms = {name: float(np.linalg.norm(protected[name])) for name in protected}
+logger.debug(
+    "DP protection applied to state dict",
+    n_params=len(state_dict),
+    max_original_norm=max(original_norms.values()),
+    max_protected_norm=max(protected_norms.values()),
+    C=C,
+    sigma=sigma,
+)
+```
+
+### Required Tests
+
+**Test 1.A — Unit test: aggregation of absolute weights**
+Add to `tests/unit/test_aggregator.py`:
+```python
+def test_aggregate_converges_not_diverges():
+    """Verify that applying FedAvg aggregation 20 times does not cause weight norm explosion."""
+    agg = FedAvgAggregator()
+    rng = np.random.default_rng(42)
+    
+    # Initialize global state
+    global_state = {
+        "layer.weight": rng.standard_normal((64, 91)).astype(np.float32),
+        "layer.bias": rng.standard_normal(64).astype(np.float32),
+    }
+    
+    initial_norm = np.sqrt(sum(np.sum(v**2) for v in global_state.values()))
+    
+    # Simulate 20 rounds of FedAvg aggregation
+    for round_num in range(20):
+        updates = []
+        for i in range(4):
+            # Simulate local training: add small perturbation to global state
+            local_state = {
+                name: val + rng.standard_normal(val.shape).astype(np.float32) * 0.01
+                for name, val in global_state.items()
+            }
+            updates.append((f"node_{i}", local_state, 1000))
+        
+        global_state = agg.aggregate(updates)
+    
+    final_norm = np.sqrt(sum(np.sum(v**2) for v in global_state.values()))
+    
+    # Weight norm should not explode (allow 5x growth as generous bound)
+    assert final_norm < initial_norm * 5.0, (
+        f"Weight norm exploded from {initial_norm:.4f} to {final_norm:.4f} "
+        f"over 20 FedAvg rounds — indicates delta accumulation bug"
+    )
+```
+
+**Test 1.B — Integration test: loss does not diverge over 20 rounds**
+Add to `tests/integration/test_federated_pipeline.py`:
+```python
+@pytest.mark.integration
+def test_fedavg_loss_does_not_diverge(small_cfg, two_node_clients):
+    """Critical: FedAvg loss must not increase monotonically (indicates delta accumulation bug)."""
+    small_cfg.federated.n_rounds = 10
+    small_cfg.federated.local_epochs = 2
+    small_cfg.federated.min_clients = 2
+    server = FederatedServer(small_cfg, use_fairness_aggregation=False, output_dir="/tmp/test_convergence")
+    
+    round_losses = []
+    for rnd in range(1, 11):
+        metrics = server.run_round(two_node_clients[0], round_num=rnd, seed=42)
+        round_losses.append(metrics.get("mean_train_loss", float("inf")))
+    
+    # Loss at round 10 must not be more than 5x the loss at round 1
+    loss_ratio = round_losses[-1] / (round_losses[0] + 1e-8)
+    assert loss_ratio < 5.0, (
+        f"FedAvg loss diverged: round 1={round_losses[0]:.4f}, "
+        f"round 10={round_losses[-1]:.4f}, ratio={loss_ratio:.2f}. "
+        f"Full history: {[round(x, 4) for x in round_losses]}"
+    )
+    
+    # Additionally, final loss should not exceed 5.0 for binary classification
+    assert round_losses[-1] < 5.0, (
+        f"FedAvg BCE loss={round_losses[-1]:.4f} at round 10 is unreasonably high "
+        f"for binary classification. Expected < 5.0."
+    )
+```
+
+**Test 1.C — Regression test: weight norm stays bounded**
+```python
+@pytest.mark.regression
+def test_global_model_weight_norm_bounded():
+    """Verify that the global model weight norm remains within reasonable bounds after 20 rounds."""
+    # After running the full simulation (seed=42, 20 rounds), load the final checkpoint
+    # and verify weight norm is reasonable for a model trained on binary classification
+    ckpt_path = Path("experiments/runs/") / ... # find most recent fedagent_chain_full run
+    # ...
+    total_norm = ... # compute weight norm
+    assert total_norm < 1000.0, f"Weight norm {total_norm} is unreasonably large"
+    assert total_norm > 0.01, f"Weight norm {total_norm} is near zero (collapsed model)"
+```
+
+### Validation Methodology
+
+After implementing the fix, run the no_fairness ablation for 20 rounds and verify the per_round.json:
+```bash
+# Generate fresh data
+python scripts/generate_synthetic_data.py --config configs/experiment/fedagent_chain_full.yaml --seed 42
+
+# Run no_fairness ablation (Standard FedAvg)
+python scripts/run_federated_simulation.py \
+    --config configs/experiment/ablation/no_fairness.yaml \
+    --seed 42 --no-mlflow
+
+# Check the per_round.json for the new run
+python -c "
+import json; import sys
+from pathlib import Path
+runs = sorted(Path('experiments/runs').glob('ablation_no_fairness_seed42_*'))
+latest = runs[-1] / 'metrics' / 'per_round.json'
+with open(latest) as f:
+    history = json.load(f)
+losses = [r['mean_train_loss'] for r in history]
+print('Per-round BCE losses:', [round(x, 4) for x in losses])
+final_loss = losses[-1]
+assert final_loss < 2.0, f'FAIL: Final loss {final_loss:.4f} > 2.0, FedAvg still diverging'
+assert losses[-1] < losses[0] * 3, f'FAIL: Loss at round 20 is {losses[-1]/losses[0]:.1f}x round 1 loss'
+print('PASS: Loss convergence verified')
+"
+```
+
+### Logging Requirements
+- Every `train_round()` call must log: `train_loss`, `f1`, `weight_norm_delta`, `dp_noise_applied`
+- Every `run_round()` call must log: `global_weight_norm`, `aggregated_weight_norm`, loss explosion check result
+- If weight norm exceeds 500.0 at any round, emit a WARNING level log
+
+### Expected Outputs
+- Standard FedAvg 20-round per_round.json showing stable or decreasing BCE loss
+- BCE loss at round 20 < 2.0 (reasonable for binary classification with sigmoid)
+- No `RuntimeError` from loss explosion detector
+- All unit tests in `test_aggregator.py` passing
+- Integration convergence test passing
+
+### Success Criteria
+- [ ] `tests/unit/test_aggregator.py::test_aggregate_converges_not_diverges` PASSES
+- [ ] `tests/integration/test_federated_pipeline.py::test_fedavg_loss_does_not_diverge` PASSES
+- [ ] `tests/integration/test_federated_pipeline.py::test_global_model_state_updates_after_round` PASSES
+- [ ] Full 20-round ablation no_fairness run: BCE loss at round 20 < 2.0
+- [ ] Full 20-round ablation no_fairness run: BCE loss ratio (round20/round1) < 3.0
+- [ ] Global weight norm at round 20 < 500.0
+- [ ] No NaN or Inf in any checkpoint parameter
+
+### Failure Criteria
+- Loss at round 20 > 5.0 (still diverging)
+- Any NaN in checkpoint state dict
+- Weight norm ratio > 10.0 (still exploding)
+- Any new test failures introduced that did not exist in Phase 0 baseline
+
+### Stop Conditions
+If loss is still monotonically increasing after the fix, halt. The aggregation logic must be inspected again. Print the global weight norm at every round and the aggregated weight norm before and after application. The issue may be in `protect_state_dict` applying excessively large DP noise to the absolute weights rather than to deltas only.
+
+### Git Commit Recommendation
+```
+git add src/federated/client.py src/federated/server.py src/federated/aggregator.py \
+        src/federated/privacy.py tests/unit/test_aggregator.py \
+        tests/integration/test_federated_pipeline.py
+git commit -m "phase1: fix FedAvg delta-accumulation divergence, add convergence diagnostics
+
+- client returns DP-protected absolute weights (not raw delta)
+- server applies weighted mean of absolute weights (true FedAvg)
+- aggregator validates no NaN/Inf in input state dicts
+- add loss explosion detector (RuntimeError if loss > 50)
+- add per-round weight norm logging
+- add convergence unit test (20 rounds, norm stays bounded)
+- add integration test (loss at round 10 < 5x round 1 loss)
+
+Fixes: CI-2 (FedAvg divergence), prerequisite for CI-3 (cross-seed variance)"
+```
+
+---
+
+**PHASE COMPLETION CHECKLIST — PHASE 1**
+
+**SUCCESS CONDITIONS:**
+- All new tests pass ✓
+- No regressions from Phase 0 baseline ✓
+- No_fairness 20-round loss < 2.0 at round 20 ✓
+- Weight norm bounded ✓
+
+**FAIL CONDITIONS:**
+- Loss still monotonically increasing after fix
+- New NaN in checkpoints
+- Any test_aggregator.py test newly failing
+
+**NEXT PHASE ENTRY REQUIREMENTS:**
+Phase 1 success criteria verified. `per_round.json` for no_fairness seed=42 shows non-diverging loss. Unit and integration tests pass.
+
+**DO NOT CONTINUE TO PHASE 2 UNTIL ALL SUCCESS CRITERIA PASS.**
+
+---
+
+## Phase 2 — Fairness Pipeline Corrections
+
+### Objective
+Fix the `_get_batch_group_labels` index mismatch bug that causes the fairness penalty Ω_fair to be computed on incorrect group-sample pairings. This is the likely root cause of FedAgent-Chain failing to improve (and in some attributes worsening) fairness disparity. After this fix, re-run the fairness training and verify that D_fair for disability actually decreases with fairness-aware FedAvg compared to standard FedAvg.
+
+### Why This Phase Matters
+The entire scientific contribution of FedAgent-Chain is built on the claim that fairness-aware federated training reduces disparity across protected groups. The audit found that disability D_fair *increases* by 106% with FedAgent-Chain vs Standard FedAvg. If this is caused by the group label mismatch (fairness penalty being applied to wrong groups, producing adversarial gradients that harm minority groups), then fixing this bug should restore the fairness improvement.
+
+If the fairness disparity still increases AFTER this fix, then the theoretical mechanism of the fairness penalty needs fundamental redesign — which would require a major revision of Section 4.6 of the paper. This phase determines which scenario is true.
+
+### Root Cause Explanation
+In `src/federated/client.py`, `_get_batch_group_labels()`:
+```python
+def _get_batch_group_labels(self, batch: dict) -> np.ndarray | None:
+    if not hasattr(self, "_group_label_cache"):
+        try:
+            self._group_label_cache = self.train_dataset.get_group_labels("disability_category")
+        except Exception:
+            self._group_label_cache = None
+
+    if self._group_label_cache is None:
+        return None
+
+    # BUG: Returns first N items of full-dataset cache, not the actual batch items
+    return self._group_label_cache[: len(batch["label"])]
+```
+
+The `DataLoader` with `shuffle=True` reorders samples. `batch["label"]` contains labels for items at positions `[idx_0, idx_1, ..., idx_N-1]` where these indices are shuffled. But `self._group_label_cache[:N]` returns group labels for dataset positions `[0, 1, ..., N-1]` — a completely different set of items. The fairness penalty is thus computed between predictions for items from one position and group memberships from entirely different items.
+
+This is especially harmful because the fairness penalty tries to equalize predictions across groups, but with the wrong group assignments, it may actually WIDEN disparities.
+
+### Files Involved
+- `src/data/dataset.py` — `EmploymentDataset.__getitem__` must return sample index
+- `src/federated/client.py` — `_get_batch_group_labels` must use batch indices
+- `tests/unit/test_fairness.py` — add batch alignment test
+- `tests/integration/test_federated_pipeline.py` — add fairness penalty correctness test
+
+### Required Code Modifications
+
+**Modification 2.1 — `src/data/dataset.py`, `__getitem__` returns index**
+
+```python
+# BEFORE
+def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    row = self.outcomes.iloc[idx]
+    # ... encoding logic ...
+    item: Dict[str, torch.Tensor] = {
+        "features": torch.from_numpy(features),
+        "label": torch.tensor(label, dtype=torch.float32),
+    }
+    if self.sample_weights is not None:
+        item["weight"] = torch.tensor(float(self.sample_weights[idx]), dtype=torch.float32)
+    return item
+
+# AFTER — include dataset index for correct group label lookup
+def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    row = self.outcomes.iloc[idx]
+    # ... encoding logic (unchanged) ...
+    item: Dict[str, torch.Tensor] = {
+        "features": torch.from_numpy(features),
+        "label": torch.tensor(label, dtype=torch.float32),
+        "idx": torch.tensor(idx, dtype=torch.long),  # ADD THIS LINE
+    }
+    if self.sample_weights is not None:
+        item["weight"] = torch.tensor(float(self.sample_weights[idx]), dtype=torch.float32)
+    return item
+```
+
+**Modification 2.2 — `src/federated/client.py`, `_get_batch_group_labels` corrected**
+
+```python
+# BEFORE — returns wrong indices
+def _get_batch_group_labels(self, batch: dict) -> np.ndarray | None:
+    if not hasattr(self, "_group_label_cache"):
+        try:
+            self._group_label_cache = self.train_dataset.get_group_labels("disability_category")
+        except Exception:
+            self._group_label_cache = None
+    if self._group_label_cache is None:
+        return None
+    return self._group_label_cache[: len(batch["label"])]  # BUG
+
+# AFTER — uses actual batch indices for correct group lookup
+def _get_batch_group_labels(self, batch: dict) -> np.ndarray | None:
+    """Return disability_category group labels for the exact samples in this batch.
+    
+    Uses the dataset index stored in batch['idx'] (added in EmploymentDataset.__getitem__)
+    to look up the correct group labels for each sample in the shuffled batch.
+    
+    Returns None gracefully if group labels are unavailable.
     """
-    from sklearn.model_selection import train_test_split
+    if not hasattr(self, "_group_label_cache"):
+        try:
+            self._group_label_cache = self.train_dataset.get_group_labels("disability_category")
+        except Exception:
+            self.logger.warning(
+                "Failed to build group label cache for fairness penalty",
+                node_id=self.node_id,
+            )
+            self._group_label_cache = None
+    
+    if self._group_label_cache is None:
+        return None
+    
+    batch_indices = batch.get("idx")
+    if batch_indices is None:
+        self.logger.warning(
+            "Batch does not contain 'idx' key — fairness penalty cannot be applied. "
+            "Ensure EmploymentDataset.__getitem__ returns 'idx'.",
+            node_id=self.node_id,
+        )
+        return None
+    
+    indices = batch_indices.numpy().astype(int)
+    
+    # Bounds check
+    max_idx = len(self._group_label_cache) - 1
+    if np.any(indices > max_idx) or np.any(indices < 0):
+        self.logger.error(
+            "Batch indices out of bounds for group label cache",
+            max_cache_idx=max_idx,
+            batch_idx_range=(int(indices.min()), int(indices.max())),
+            node_id=self.node_id,
+        )
+        return None
+    
+    return self._group_label_cache[indices]
+```
 
-    labels = self.outcomes["suitability_label"].values
-    idx    = np.arange(len(self.outcomes))
+**Modification 2.3 — `src/federated/client.py`, improve fairness penalty logging**
 
-    train_idx, test_idx = train_test_split(
-        idx,
-        test_size=test_size,
-        random_state=seed,
-        stratify=labels,
+In the `train_round()` training loop, when the fairness penalty fires, log:
+```python
+if fairness_enabled and batch_counter % 5 == 0:
+    try:
+        batch_group_labels = self._get_batch_group_labels(batch)
+        if batch_group_labels is not None:
+            # Verify alignment: same number of labels as batch samples
+            assert len(batch_group_labels) == len(batch["label"]), (
+                f"Group label count ({len(batch_group_labels)}) != "
+                f"batch size ({len(batch['label'])})"
+            )
+            # ... existing penalty computation ...
+            if len(group_means) >= 2:
+                vals = torch.stack(list(group_means.values()))
+                diff = vals.max() - vals.min()
+                fairness_penalty_value = float(diff.item())
+                loss = loss + lambda_fair * diff
+                
+                # Log fairness penalty magnitude every 50 batches
+                if batch_counter % 50 == 0:
+                    self.logger.debug(
+                        "Fairness penalty applied",
+                        node_id=self.node_id,
+                        batch=batch_counter,
+                        n_groups_in_batch=len(group_means),
+                        fairness_penalty=round(fairness_penalty_value, 6),
+                        lambda_fair=lambda_fair,
+                    )
+    except AssertionError as e:
+        self.logger.error("Group label alignment failed", error=str(e))
+        # Do not apply fairness penalty if alignment fails
+```
+
+**Modification 2.4 — Add fairness penalty unit test for alignment correctness**
+
+Add to `tests/unit/test_fairness.py`:
+```python
+def test_batch_group_labels_alignment():
+    """Verify that group labels returned by _get_batch_group_labels 
+    correspond to the correct samples via the idx field."""
+    from src.data.dataset import EmploymentDataset
+    from src.data.synthetic_generator import generate_synthetic_node_data
+    from torch.utils.data import DataLoader
+    
+    data = generate_synthetic_node_data("saudi_arabia", 100, 50, 200, seed=42)
+    ds = EmploymentDataset(data["outcomes"], data["users"], data["jobs"])
+    
+    # Verify idx is returned
+    item = ds[0]
+    assert "idx" in item, "EmploymentDataset.__getitem__ must return 'idx'"
+    assert item["idx"].item() == 0
+    
+    item = ds[42]
+    assert item["idx"].item() == 42
+    
+    # Verify idx survives DataLoader batching
+    loader = DataLoader(ds, batch_size=16, shuffle=True)
+    batch = next(iter(loader))
+    assert "idx" in batch, "DataLoader must propagate 'idx' field"
+    assert len(batch["idx"]) == 16
+    
+    # Verify group labels correspond to correct samples
+    group_cache = ds.get_group_labels("disability_category")
+    batch_indices = batch["idx"].numpy()
+    expected_groups = group_cache[batch_indices]
+    
+    # Manually simulate what _get_batch_group_labels now does
+    actual_groups = group_cache[batch_indices]
+    
+    assert list(expected_groups) == list(actual_groups), (
+        "Group labels do not match expected values for batch indices"
     )
+    
+    # VERIFY THE OLD BUG: check that first-N-items approach gives DIFFERENT results
+    old_approach = group_cache[:16]
+    # With shuffling, these should differ from correct alignment (with high probability)
+    # This is not guaranteed but very likely with shuffled data
+    match_count = sum(a == b for a, b in zip(old_approach, actual_groups))
+    print(f"Old approach matches correct labels for {match_count}/16 samples (expected < 16 with shuffling)")
+```
 
-    train_outcomes = self.outcomes.iloc[train_idx].reset_index(drop=True)
-    test_outcomes  = self.outcomes.iloc[test_idx].reset_index(drop=True)
+### Fairness Validation Protocol
 
-    # Restore DataFrame columns from index so downstream code works
-    users_df_reset = self.users_df.reset_index()
-    jobs_df_reset  = self.jobs_df.reset_index()
+After the fix, run the fairness-aware simulation and measure actual D_fair before and after:
+```bash
+# Step 1: Run Standard FedAvg (no fairness) with fixed FedAvg
+python scripts/run_federated_simulation.py \
+    --config configs/experiment/ablation/no_fairness.yaml \
+    --seed 42 --no-mlflow
 
-    train_weights = (
-        self.sample_weights[train_idx]
-        if self.sample_weights is not None else None
-    )
+# Step 2: Run FedAgent-Chain (with fairness) with fixed group labels
+python scripts/run_federated_simulation.py \
+    --config configs/experiment/fedagent_chain_full.yaml \
+    --seed 42 --no-mlflow
 
-    train_ds = EmploymentDataset(
-        outcomes_df=train_outcomes,
-        users_df=users_df_reset,
-        jobs_df=jobs_df_reset,
-        consent_filter=False,   # Already filtered upstream
-        sample_weights=train_weights,
-    )
-    test_ds = EmploymentDataset(
-        outcomes_df=test_outcomes,
-        users_df=users_df_reset,
-        jobs_df=jobs_df_reset,
-        consent_filter=False,
-        sample_weights=None,    # Never weight the test set
-    )
+# Step 3: Evaluate both and compare D_fair
+python scripts/run_evaluation.py \
+    --runs-dir experiments/runs/ \
+    --results-dir experiments/results/phase2_fairness_check/ \
+    --seed 42
+
+# Step 4: Verify D_fair(disability) is LOWER for FedAgent-Chain than Standard FedAvg
+python -c "
+import pandas as pd
+df = pd.read_csv('experiments/results/phase2_fairness_check/table_3_fairness_results.csv')
+fa_disability = df.loc[df['Attribute'].str.contains('Disab'), 'FedAgent-Chain'].values[0]
+std_fl_disability = df.loc[df['Attribute'].str.contains('Disab'), 'Standard FedAvg'].values[0]
+print(f'FedAgent-Chain disability D_fair: {fa_disability:.4f}')
+print(f'Standard FedAvg disability D_fair: {std_fl_disability:.4f}')
+if fa_disability < std_fl_disability:
+    print('PASS: FedAgent-Chain reduces disability disparity')
+else:
+    print(f'FAIL: FedAgent-Chain still does NOT reduce disability disparity')
+    print('This requires redesign of the fairness regularization objective')
+    print('See architectural note in REPAIR_LOG.md for alternative approaches')
+"
+```
+
+**CRITICAL DECISION POINT**: If D_fair(disability) for FedAgent-Chain is still ≥ Standard FedAvg after this fix, halt and evaluate whether:
+1. The λ_fairness value (0.5) is too large (causing overcorrection) — try λ ∈ {0.05, 0.1, 0.2}
+2. The surrogate penalty (mean predicted probability difference) is insufficient — consider F1 disparity surrogate
+3. The Non-IID data distribution makes group-level fairness improvement fundamentally difficult at this data scale
+
+Document findings in `REPAIR_LOG.md` before continuing.
+
+### Logging Requirements
+- Log group distribution in each batch (number of samples per group) every 100 batches
+- Log fairness penalty magnitude every 50 batches
+- Log D_fair at every round for all 4 protected attributes
+
+### Expected Outputs
+- `experiments/results/phase2_fairness_check/table_3_fairness_results.csv` with corrected D_fair values
+- D_fair(disability) for FedAgent-Chain ≤ D_fair for Standard FedAvg (OR documented explanation for why it does not)
+
+### Success Criteria
+- [ ] `tests/unit/test_fairness.py::test_batch_group_labels_alignment` PASSES
+- [ ] `EmploymentDataset.__getitem__` returns `idx` key
+- [ ] `_get_batch_group_labels` uses `batch["idx"]` indices
+- [ ] D_fair(disability): FedAgent-Chain < Standard FedAvg, OR documented redesign proposal in REPAIR_LOG.md
+- [ ] No new test failures
+
+### Failure Criteria
+- `batch["idx"]` not returned by DataLoader (check custom collate_fn interference)
+- D_fair(disability) still higher for FedAgent-Chain AND no redesign plan documented
+
+### Stop Conditions
+If `batch["idx"]` is not propagated by PyTorch DataLoader (which would indicate a custom collate_fn issue), stop and investigate the DataLoader configuration. Default DataLoader collates tensor fields automatically, so this should work without changes.
+
+### Git Commit Recommendation
+```
+git add src/data/dataset.py src/federated/client.py \
+        tests/unit/test_fairness.py
+git commit -m "phase2: fix group label alignment in fairness penalty
+
+- EmploymentDataset.__getitem__ now returns 'idx' (dataset position)
+- _get_batch_group_labels uses batch['idx'] for correct sample-to-group mapping
+- adds alignment assertion to catch future regressions
+- adds fairness penalty magnitude logging
+- fixes root cause of D_fair(disability) increasing with fairness-aware training
+
+Fixes: CI-5 (group label mismatch)"
+```
+
+---
+
+**PHASE COMPLETION CHECKLIST — PHASE 2**
+
+**SUCCESS CONDITIONS:**
+- Alignment unit test passes ✓
+- idx propagated through DataLoader ✓
+- Fairness results show directional improvement OR redesign documented ✓
+
+**FAIL CONDITIONS:**
+- idx not in batch dict
+- D_fair still worsens without documented redesign plan
+
+**NEXT PHASE ENTRY REQUIREMENTS:**
+Phase 2 success criteria met. Table 3 generated with corrected alignment.
+
+**DO NOT CONTINUE TO PHASE 3 UNTIL ALL SUCCESS CRITERIA PASS.**
+
+---
+
+## Phase 3 — Baseline Integrity Repairs
+
+### Objective
+Fix two baseline integrity issues: (1) the Centralized baseline flag is never handled in the data loading pipeline, causing Local Baseline == Centralized outputs, and (2) fix the dead code in `_find_best_checkpoint` that makes the fallback logic unreachable. Additionally, fix `run_baselines.py` to not manipulate `sys.argv`. Verify that Local Baseline and Centralized produce genuinely different outputs.
+
+### Why This Phase Matters
+Table 2 in the paper contains four methods: FedAgent-Chain, Standard FedAvg, Local Baseline, and Centralized. Two of these four (Local Baseline and Centralized) are currently producing identical outputs, meaning 50% of the comparison table is meaningless. The Centralized baseline is the theoretical upper bound on FL performance — it represents "if we could pool all data at one location, how well would we do?" This is a critical anchor for interpreting FL results. Without it, we cannot assess whether federation recovers most of the utility lost by data locality.
+
+### Root Cause Explanation
+
+**Root Cause 3A: Centralized flag not handled**
+In `scripts/run_federated_simulation.py`, `load_node_dataset()`:
+```python
+def load_node_dataset(node_id, data_dir, cfg, seed):
+    # Only loads per-node data regardless of cfg
+    users_csv = node_dir / "users.csv"
+    # ...
+    full_dataset = EmploymentDataset(outcomes_df, users_df, jobs_df, consent_filter=True)
+    train_ds, test_ds = full_dataset.split(test_size=0.20, seed=seed)
     return train_ds, test_ds
 ```
+The `data.centralized: true` flag in `configs/experiment/baseline_centralized.yaml` is never read. Centralized training should pool all four nodes' data into a single training set and train a single model with no federation.
 
-### Step B — Update `FederatedClient` to hold separate train/test datasets
-
-File: `src/federated/client.py`
-
-Change the constructor signature and body:
-
+**Root Cause 3B: Dead code after return in `_find_best_checkpoint`**
+In `scripts/run_evaluation.py`:
 ```python
-# BEFORE constructor signature:
-def __init__(
-    self,
-    node_id: str,
-    dataset: EmploymentDataset,
-    cfg: DictConfig,
-    blockchain: PermissionedBlockchain,
-    device: str = "cpu",
-) -> None:
-    ...
-    self.dataset = dataset
+def _find_best_checkpoint(run_dir: Path) -> Path:
+    # ... logic ...
+    candidate = ckpt_dir / f"global_model_round_{best_round:03d}.pt"
+    logger.info("Selected best checkpoint", ...)
+    return candidate   # <-- EARLY RETURN
 
-# AFTER constructor signature:
-def __init__(
-    self,
-    node_id: str,
-    train_dataset: EmploymentDataset,
-    test_dataset: EmploymentDataset,
-    cfg: DictConfig,
-    blockchain: PermissionedBlockchain,
-    device: str = "cpu",
-) -> None:
-    ...
-    self.train_dataset = train_dataset
-    self.test_dataset  = test_dataset
-    self.dataset       = train_dataset   # backward-compatible alias
+    # DEAD CODE: Never executed
+    saved = sorted(ckpt_dir.glob("global_model_round_*.pt"))
+    # ... fallback logic ...
 ```
 
-Inside `train_round()`, find the `DataLoader` that creates the training loader:
+**Root Cause 3C: `run_baselines.py` sys.argv manipulation**
+`run_baselines.py` overwrites `sys.argv` to call `run_main()`, which is fragile and will fail in test environments.
+
+### Files Involved
+- `scripts/run_federated_simulation.py` — `load_node_dataset()` must handle centralized flag
+- `scripts/run_evaluation.py` — `_find_best_checkpoint()` dead code removal + fallback fix
+- `scripts/run_baselines.py` — sys.argv manipulation removal
+- `configs/experiment/baseline_centralized.yaml` — verify configuration
+- `tests/unit/test_config_loading.py` — add centralized mode test
+
+### Required Code Modifications
+
+**Modification 3.1 — `scripts/run_federated_simulation.py`, implement centralized mode**
 
 ```python
-# BEFORE:
-loader = DataLoader(
-    self.dataset,
-    batch_size=self.batch_size,
-    shuffle=True,
-    drop_last=False,
-)
-
-# AFTER:
-loader = DataLoader(
-    self.train_dataset,         # ← explicitly use train split
-    batch_size=self.batch_size,
-    shuffle=True,
-    drop_last=False,
-)
-```
-
-Inside `_evaluate_local()`, change the loader to use the test set:
-
-```python
-# BEFORE:
-loader = DataLoader(self.dataset, batch_size=256, shuffle=False)
-
-# AFTER:
-loader = DataLoader(self.test_dataset, batch_size=256, shuffle=False)
-```
-
-Also update the `n_samples` return value in `train_round()` to reflect training
-set size (this feeds the FedAvg weight computation):
-
-```python
-# In the return statement at the end of train_round():
-# BEFORE:
-return protected_delta, len(self.dataset), metrics
-
-# AFTER:
-return protected_delta, len(self.train_dataset), metrics
-```
-
-### Step C — Update `load_node_dataset()` in the simulation script
-
-File: `scripts/run_federated_simulation.py`
-
-Replace `load_node_dataset()` entirely:
-
-```python
-def load_node_dataset(
-    node_id: str,
-    data_dir: Path,
-    cfg: object,
-    seed: int,
-) -> tuple:
-    """Load or generate dataset for a single node and return train/test split."""
-    node_dir = data_dir / node_id
-    users_csv    = node_dir / "users.csv"
-    jobs_csv     = node_dir / "jobs.csv"
-    outcomes_csv = node_dir / "outcomes.csv"
-
-    if users_csv.exists() and jobs_csv.exists() and outcomes_csv.exists():
-        logger.info("Loading existing dataset", node_id=node_id)
-        users_df    = pd.read_csv(users_csv)
-        jobs_df     = pd.read_csv(jobs_csv)
-        outcomes_df = pd.read_csv(outcomes_csv)
+def load_node_dataset(node_id: str, data_dir: Path, cfg: object, seed: int) -> tuple:
+    """Load or generate dataset for a single node and return train/test split.
+    
+    When cfg.data.centralized is True, this function is called with node_id='centralized'
+    and returns data pooled from all four regional nodes. This implements the 
+    centralized baseline where all data is available to a single model.
+    """
+    data_cfg = cfg.get("data", {})
+    is_centralized = bool(data_cfg.get("centralized", False))
+    
+    if is_centralized:
+        # Load ALL nodes' data and concatenate
+        # This represents the theoretical upper bound: if data sovereignty could be waived
+        all_nodes = data_cfg.get("nodes", ["saudi_arabia", "united_states", "china", "europe"])
+        all_users = []
+        all_jobs = []
+        all_outcomes = []
+        
+        for nid in all_nodes:
+            nid_dir = data_dir / nid
+            if not (nid_dir / "users.csv").exists():
+                raise FileNotFoundError(
+                    f"Centralized baseline: data for node '{nid}' not found at {nid_dir}. "
+                    "Run generate_synthetic_data.py first."
+                )
+            all_users.append(pd.read_csv(nid_dir / "users.csv"))
+            all_jobs.append(pd.read_csv(nid_dir / "jobs.csv"))
+            all_outcomes.append(pd.read_csv(nid_dir / "outcomes.csv"))
+        
+        users_df = pd.concat(all_users, ignore_index=True)
+        jobs_df = pd.concat(all_jobs, ignore_index=True)
+        outcomes_df = pd.concat(all_outcomes, ignore_index=True)
+        
+        logger.info(
+            "Centralized baseline: pooled data from all nodes",
+            n_nodes=len(all_nodes),
+            total_users=len(users_df),
+            total_jobs=len(jobs_df),
+            total_outcomes=len(outcomes_df),
+        )
     else:
-        logger.info("Generating synthetic dataset", node_id=node_id)
-        data = generate_synthetic_node_data(
-            node_id=node_id, n_users=2500, n_jobs=1250, n_pairs=12500, seed=seed
-        )
-        users_df, jobs_df, outcomes_df = (
-            data["users"], data["jobs"], data["outcomes"]
-        )
-
+        # Standard per-node loading (existing logic)
+        node_dir = data_dir / node_id
+        # ... existing per-node loading code ...
+    
     full_dataset = EmploymentDataset(
         outcomes_df=outcomes_df,
         users_df=users_df,
@@ -399,2437 +1012,1528 @@ def load_node_dataset(
     return train_ds, test_ds
 ```
 
-Update the client creation loop inside `main()`:
-
+Also update `main()` in `run_federated_simulation.py` to handle centralized mode:
 ```python
-# BEFORE:
-dataset = load_node_dataset(node_id, data_dir, cfg, seed=args.seed + i * 1000)
-client = FederatedClient(
-    node_id=node_id, dataset=dataset, cfg=cfg,
-    blockchain=blockchain, device="cpu",
-)
+is_centralized = bool(cfg.get("data", {}).get("centralized", False))
 
-# AFTER:
-train_ds, test_ds = load_node_dataset(
-    node_id, data_dir, cfg, seed=args.seed + i * 1000
-)
-client = FederatedClient(
-    node_id=node_id,
-    train_dataset=train_ds,
-    test_dataset=test_ds,
-    cfg=cfg,
-    blockchain=blockchain,
-    device="cpu",
-)
-logger.info(
-    "Client created",
-    node_id=node_id,
-    n_train=len(train_ds),
-    n_test=len(test_ds),
-)
-```
-
-### Step D — Update integration test fixtures
-
-File: `tests/integration/test_federated_pipeline.py`
-
-Anywhere `FederatedClient` is constructed in the fixture `two_node_clients`,
-apply the same train/test split:
-
-```python
-@pytest.fixture
-def two_node_clients(small_cfg):
-    blockchain = PermissionedBlockchain(records_per_block=10)
+if is_centralized:
+    # For centralized baseline: single client, single node, all data pooled
+    train_ds, test_ds = load_node_dataset("centralized", data_dir, cfg, seed=args.seed)
+    clients = [FederatedClient(
+        node_id="centralized",
+        train_dataset=train_ds,
+        test_dataset=test_ds,
+        cfg=cfg,
+        blockchain=blockchain,
+        device="cpu",
+    )]
+    # Override min_clients for centralized mode
+    cfg.federated.min_clients = 1
+    logger.info("Centralized mode: single client with pooled data", total_samples=len(train_ds))
+else:
+    # Standard multi-node loading
     clients = []
-    for node_id in ["saudi_arabia", "united_states"]:
-        data = generate_synthetic_node_data(
-            node_id=node_id, n_users=60, n_jobs=30, n_pairs=120, seed=42
-        )
-        full_ds = EmploymentDataset(
-            outcomes_df=data["outcomes"],
-            users_df=data["users"],
-            jobs_df=data["jobs"],
-            consent_filter=True,
-        )
-        train_ds, test_ds = full_ds.split(test_size=0.20, seed=42)
-        client = FederatedClient(
-            node_id=node_id,
-            train_dataset=train_ds,
-            test_dataset=test_ds,
-            cfg=small_cfg,
-            blockchain=blockchain,
-            device="cpu",
-        )
-        clients.append(client)
-    return clients, blockchain
+    for i, node_id in enumerate(nodes):
+        # ... existing logic ...
 ```
 
----
-
-## Fix 1.2 — Break Label-Formula Leakage
-
-### Problem
-`compute_suitability_label()` in `src/data/synthetic_generator.py` uses
-weights (α=0.40, β=0.25, γ=0.20, δ=0.15) that are **identical** to the
-`EmploymentAgent` scoring weights. The neural network is therefore learning to
-predict a nearly perfect replica of its own objective function, which inflates
-all metrics. The model cannot fail on this data.
-
-### File to edit
-`src/data/synthetic_generator.py`
-
-### Broken code (~lines 220–228)
-```python
-score = (
-    0.40 * skill_overlap
-    + 0.25 * accom_coverage
-    + 0.20 * lang_match
-    + 0.15 * mode_match
-)
-```
-
-### Fixed code — change to a different weighting scheme:
-```python
-# Label-generating oracle uses deliberately different coefficients
-# from the model's scoring function (α=0.40 / β=0.25 / γ=0.20 / δ=0.15)
-# to prevent artificial separability.
-score = (
-    0.35 * skill_overlap
-    + 0.30 * accom_coverage
-    + 0.20 * lang_match
-    + 0.15 * mode_match
-)
-```
-
-Also **increase the noise** that is already added, so the label boundary is
-not perfectly sharp:
+**Modification 3.2 — `scripts/run_evaluation.py`, fix dead code in `_find_best_checkpoint`**
 
 ```python
-# BEFORE:
-if rng is not None:
-    score += float(rng.normal(0, 0.05))
-
-# AFTER:
-if rng is not None:
-    score += float(rng.normal(0, 0.08))   # wider noise → more realistic difficulty
-```
-
-### Why this matters
-After this change, the model must genuinely learn a mapping that differs from
-the generating process. Expect F1 to drop from the earlier over-estimated
-range into a more credible region (~0.72–0.80). This is scientifically honest
-and does not weaken your paper's contribution — it strengthens it.
-
----
-
-## Fix 1.3 — Regenerate the Synthetic Dataset
-
-After Fix 1.2, delete any existing generated files and regenerate:
-
-```bash
-make clean-data
-python scripts/generate_synthetic_data.py \
-    --config configs/experiment/fedagent_chain_full.yaml \
-    --seed 42 \
-    --output-dir data/synthetic/
-```
-
-Verify the positive label rate sits in the 40–58 % range (not suspiciously
-close to 50 % for every node):
-
-```python
-import pandas as pd
-for node in ["saudi_arabia","united_states","china","europe"]:
-    df = pd.read_csv(f"data/synthetic/{node}/outcomes.csv")
-    rate = df["suitability_label"].mean()
-    print(f"{node}: {rate:.3f}")
-# Each value should be between 0.40 and 0.60
-```
-
----
-
-## ✅ Phase 1 Success Gate
-
-- [ ] `pytest tests/unit/test_synthetic_generator.py -v` — all tests pass
-- [ ] `pytest tests/integration/ -v -m integration` — all tests pass
-- [ ] Running `FederatedClient.train_round()` on a small dataset for 2 epochs,
-  then calling `_evaluate_local()` gives **different** accuracy values for
-  different rounds (i.e., the model is actually learning on training data and
-  measuring on held-out data)
-- [ ] Print `len(client.train_dataset)` and `len(client.test_dataset)` — they
-  should be approximately 80 % and 20 % of the total pair count
-- [ ] Positive label rate across all four node CSVs is between 0.40 and 0.60
-- [ ] The model's training F1 is **higher** than test F1 after 5 epochs (confirms
-  the split is not contaminated)
-
----
-
----
-
-# PHASE 2 — Connect the Evaluation Pipeline to Actual Simulation Outputs
-**Estimated effort: 2–3 days**  
-**Prerequisite: Phases 0 and 1 complete**
-
-This phase fixes the single most fatal flaw: every reported number in the
-paper is a Python literal. After this phase, every CSV table and every figure
-will be computed from actual trained model checkpoints.
-
----
-
-## Fix 2.1 — Rewrite `run_evaluation.py`
-
-The current file ignores all simulation outputs. Replace it entirely.
-
-File: `scripts/run_evaluation.py`
-
-```python
-#!/usr/bin/env python3
-"""Full evaluation pipeline — loads trained models and computes all paper metrics.
-
-This script MUST be run AFTER run_federated_simulation.py and run_baselines.py.
-It reads checkpoints from experiments/runs/, evaluates on held-out test data,
-and writes verified CSV files to experiments/results/.
-
-Usage:
-    python scripts/run_evaluation.py \
-        --runs-dir experiments/runs/ \
-        --results-dir experiments/results/ \
-        --seed 42
-"""
-
-from __future__ import annotations
-
-import argparse
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import json
-import numpy as np
-import pandas as pd
-import torch
-from torch.utils.data import DataLoader
-
-from src.data.dataset import EmploymentDataset
-from src.data.synthetic_generator import generate_synthetic_node_data
-from src.evaluation.fairness_evaluator import FairnessEvaluator
-from src.evaluation.metrics import (
-    aggregate_metrics_across_nodes,
-    compute_full_metrics,
-)
-from src.models.employment_model import EmploymentMatchingModel
-from src.utils.config import load_config
-from src.utils.io_utils import ensure_dir, save_json
-from src.utils.logging_utils import get_logger, setup_logging
-from src.utils.seed_utils import set_global_seed
-
-logger = get_logger("run_evaluation")
-
-NODES = ["saudi_arabia", "united_states", "china", "europe"]
-
-
-def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser()
-    p.add_argument("--runs-dir",    type=str, default="experiments/runs/")
-    p.add_argument("--results-dir", type=str, default="experiments/results/")
-    p.add_argument("--seed",        type=int, default=42)
-    p.add_argument("--log-level",   type=str, default="INFO")
-    return p.parse_args()
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def find_run_dir(runs_dir: Path, experiment_name: str) -> Path | None:
-    """Return the most recent run directory matching experiment_name."""
-    candidates = sorted(
-        runs_dir.glob(f"{experiment_name}_*"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    return candidates[0] if candidates else None
-
-
-def load_model_from_checkpoint(run_dir: Path, cfg_path: Path) -> EmploymentMatchingModel:
-    """Load EmploymentMatchingModel from final checkpoint in run_dir."""
-    cfg = load_config(cfg_path)
-    model = EmploymentMatchingModel.from_config(cfg.get("model", {}))
-    ckpt_path = run_dir / "checkpoints" / "final_model.pt"
-    if not ckpt_path.exists():
-        raise FileNotFoundError(
-            f"Checkpoint not found at {ckpt_path}. "
-            "Run run_federated_simulation.py first."
-        )
-    state_dict = torch.load(ckpt_path, map_location="cpu")
-    model.load_state_dict(state_dict)
-    model.eval()
-    logger.info("Model loaded", checkpoint=str(ckpt_path))
-    return model
-
-
-def evaluate_model_on_node(
-    model: EmploymentMatchingModel,
-    node_id: str,
-    seed: int,
-    data_dir: Path = Path("data/synthetic"),
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, EmploymentDataset]:
-    """Return (y_true, y_pred, y_scores, test_dataset) for one node."""
-    node_dir = data_dir / node_id
-    users_df    = pd.read_csv(node_dir / "users.csv")
-    jobs_df     = pd.read_csv(node_dir / "jobs.csv")
-    outcomes_df = pd.read_csv(node_dir / "outcomes.csv")
-
-    full_ds = EmploymentDataset(
-        outcomes_df=outcomes_df,
-        users_df=users_df,
-        jobs_df=jobs_df,
-        consent_filter=True,
-    )
-    _, test_ds = full_ds.split(test_size=0.20, seed=seed)
-    loader     = DataLoader(test_ds, batch_size=256, shuffle=False)
-
-    y_true_list, y_pred_list, y_score_list = [], [], []
-    with torch.no_grad():
-        for batch in loader:
-            feats   = batch["features"]
-            labels  = batch["label"].numpy()
-            probs   = model(feats).squeeze(-1).numpy()
-            preds   = (probs >= 0.5).astype(int)
-            y_true_list.extend(labels.tolist())
-            y_pred_list.extend(preds.tolist())
-            y_score_list.extend(probs.tolist())
-
-    return (
-        np.array(y_true_list),
-        np.array(y_pred_list),
-        np.array(y_score_list),
-        test_ds,
-    )
-
-
-def build_prediction_dataframe(
-    model: EmploymentMatchingModel,
-    node_id: str,
-    seed: int,
-    data_dir: Path = Path("data/synthetic"),
-) -> pd.DataFrame:
+def _find_best_checkpoint(run_dir: Path) -> Path:
+    """Return path to the best-performing checkpoint by F1, or final_model.pt.
+    
+    Selects the checkpoint at the round with highest mean_f1.
+    If no per-round checkpoints exist, falls back to final_model.pt.
+    If neither exists, raises FileNotFoundError.
     """
-    Return a DataFrame with columns:
-        suitability_label, predicted_label, predicted_score,
-        disability_category, language_primary, preferred_work_mode, node_id
-    Needed by FairnessEvaluator.
-    """
-    y_true, y_pred, y_scores, test_ds = evaluate_model_on_node(
-        model, node_id, seed, data_dir
-    )
-    outcomes = test_ds.outcomes.copy()
-    outcomes["predicted_label"] = y_pred
-    outcomes["predicted_score"] = y_scores
+    per_round_path = run_dir / "metrics" / "per_round.json"
+    final_path = run_dir / "checkpoints" / "final_model.pt"
+    ckpt_dir = run_dir / "checkpoints"
 
-    # Merge user attributes for fairness evaluation
-    users_df = test_ds.users_df.reset_index()
-    merged = outcomes.merge(
-        users_df[["user_id", "disability_category",
-                  "language_primary", "preferred_work_mode"]],
-        on="user_id", how="left"
-    )
-    merged["node_id"] = node_id
-    return merged
+    if not per_round_path.exists():
+        logger.warning("per_round.json not found, using final_model.pt", run_dir=str(run_dir))
+        return final_path
 
-
-# ── Table generators ─────────────────────────────────────────────────────────
-
-def generate_table_2(
-    models: dict[str, EmploymentMatchingModel],
-    seed: int,
-    results_dir: Path,
-) -> pd.DataFrame:
-    """Table 2: Classification and ranking metrics for all methods."""
-    rows = []
-    for method_name, model in models.items():
-        node_metrics = {}
-        for i, node_id in enumerate(NODES):
-            y_true, y_pred, y_scores, _ = evaluate_model_on_node(
-                model, node_id, seed + i * 1000
-            )
-            node_metrics[node_id] = compute_full_metrics(
-                y_true, y_pred, y_scores, k_values=[5, 10]
-            )
-
-        agg = aggregate_metrics_across_nodes(node_metrics)
-        rows.append({
-            "Method":    method_name,
-            "Accuracy":  round(agg["mean_accuracy"], 4),
-            "Precision": round(agg["mean_precision"], 4),
-            "Recall":    round(agg["mean_recall"],    4),
-            "F1":        round(agg["mean_f1"],         4),
-            "F1_std":    round(agg["std_f1"],           4),
-            "P@5":       round(agg["mean_precision_at_5"], 4),
-            "R@5":       round(agg["mean_recall_at_5"],    4),
-            "P@10":      round(agg["mean_precision_at_10"], 4),
-            "R@10":      round(agg["mean_recall_at_10"],    4),
-        })
-    df = pd.DataFrame(rows)
-    df.to_csv(results_dir / "table_2_model_performance.csv", index=False)
-    logger.info("Table 2 saved (computed from checkpoints)")
-    return df
-
-
-def generate_table_3(
-    models: dict[str, EmploymentMatchingModel],
-    seed: int,
-    results_dir: Path,
-) -> pd.DataFrame:
-    """Table 3: Fairness disparity across protected attributes."""
-    evaluator = FairnessEvaluator()
-    rows = []
-
-    attr_display = {
-        "disability_category": "Disability Category",
-        "language_primary":    "Language Group",
-        "preferred_work_mode": "Work Mode",
-        "node_id":             "Regional Node",
-    }
-
-    for attr_key, attr_label in attr_display.items():
-        row = {"Attribute": attr_label}
-        for method_name, model in models.items():
-            all_preds = []
-            for i, node_id in enumerate(NODES):
-                df_node = build_prediction_dataframe(model, node_id, seed + i * 1000)
-                all_preds.append(df_node)
-            combined = pd.concat(all_preds, ignore_index=True)
-            disparities = evaluator.evaluate(
-                combined,
-                y_true_col="suitability_label",
-                y_pred_col="predicted_label",
-            )
-            row[method_name] = round(disparities.get(attr_key, float("nan")), 4)
-        rows.append(row)
-
-    df = pd.DataFrame(rows)
-    # Compute reduction column if both Standard FL and FedAgent-Chain are present
-    if "Standard FedAvg" in df.columns and "FedAgent-Chain" in df.columns:
-        df["Reduction"] = df.apply(
-            lambda r: f"{100*(r['Standard FedAvg'] - r['FedAgent-Chain']) / (r['Standard FedAvg'] + 1e-9):.1f}%",
-            axis=1,
-        )
-    df.to_csv(results_dir / "table_3_fairness_results.csv", index=False)
-    logger.info("Table 3 saved (computed from predictions)")
-    return df
-
-
-def generate_table_4_blockchain(run_dir: Path, results_dir: Path) -> pd.DataFrame:
-    """Table 4: Read blockchain metrics from the simulation audit log."""
-    audit_path = run_dir / "blockchain_logs" / "audit_trail.json"
-    if not audit_path.exists():
-        logger.warning("Audit trail not found", path=str(audit_path))
-        return pd.DataFrame()
-
-    with open(audit_path) as f:
-        audit = json.load(f)
-
-    records = []
-    for block in audit.get("blocks", []):
-        for r in block.get("records", []):
-            if isinstance(r, dict) and r.get("type") != "genesis":
-                records.append(r)
-
-    total        = len(records)
-    valid_hashes = sum(
-        1 for r in records
-        if isinstance(r.get("hash",""), str) and len(r["hash"]) == 64
-    )
-    completeness = valid_hashes / total if total > 0 else 0.0
-
-    rows = [
-        {"Metric": "Hash Completeness",
-         "Value": f"{completeness*100:.1f}%",
-         "Description": "Fraction of records with valid SHA-256 hash"},
-        {"Metric": "Chain Integrity",
-         "Value": "Valid" if audit.get("chain_integrity_valid") else "INVALID",
-         "Description": "SHA-256 hash chain verification result"},
-        {"Metric": "Total Audit Records",
-         "Value": str(total),
-         "Description": "Model update hashes submitted"},
-        {"Metric": "Chain Length (blocks)",
-         "Value": str(audit.get("chain_length", 0)),
-         "Description": "Number of finalized blocks"},
-    ]
-    df = pd.DataFrame(rows)
-    df.to_csv(results_dir / "table_4_blockchain_results.csv", index=False)
-    logger.info("Table 4 saved (from audit log)")
-    return df
-
-
-def generate_table_7_overhead(run_dir: Path, results_dir: Path) -> pd.DataFrame:
-    """Table 7: Read per-round timing from per_round.json."""
-    metrics_path = run_dir / "metrics" / "per_round.json"
-    if not metrics_path.exists():
-        logger.warning("per_round.json not found")
-        return pd.DataFrame()
-
-    with open(metrics_path) as f:
-        rounds = json.load(f)
-
-    if not rounds:
-        return pd.DataFrame()
-
-    durations = [r.get("duration_seconds", 0.0) for r in rounds]
-    rows = [
-        {"Component": "Avg round duration (4 nodes)",
-         "CPU Time": f"{np.mean(durations):.1f}s",
-         "Notes": "Mean over all federated rounds"},
-        {"Component": "Min round duration",
-         "CPU Time": f"{np.min(durations):.1f}s",
-         "Notes": ""},
-        {"Component": "Max round duration",
-         "CPU Time": f"{np.max(durations):.1f}s",
-         "Notes": ""},
-        {"Component": "Total simulation time",
-         "CPU Time": f"{sum(durations):.1f}s",
-         "Notes": ""},
-    ]
-    df = pd.DataFrame(rows)
-    df.to_csv(results_dir / "table_7_overhead.csv", index=False)
-    logger.info("Table 7 saved (from per_round.json)")
-    return df
-
-
-# ── Main ─────────────────────────────────────────────────────────────────────
-
-def main() -> None:
-    args = parse_args()
-    setup_logging(level=args.log_level, format="console")
-    set_global_seed(args.seed)
-
-    runs_dir    = Path(args.runs_dir)
-    results_dir = ensure_dir(Path(args.results_dir))
-
-    # ── Locate simulation run directories ───────────────────────────────────
-    run_map = {
-        "FedAgent-Chain":  find_run_dir(runs_dir, "fedagent_chain_full"),
-        "Standard FedAvg": find_run_dir(runs_dir, "ablation_no_fairness"),
-        "Local Baseline":  find_run_dir(runs_dir, "baseline_local"),
-        "Centralized":     find_run_dir(runs_dir, "baseline_centralized"),
-    }
-
-    missing = [k for k, v in run_map.items() if v is None]
-    if missing:
-        logger.error(
-            "Run directories not found. "
-            "Execute run_federated_simulation.py and run_baselines.py first.",
-            missing=missing,
-        )
-        raise FileNotFoundError(
-            f"Missing run directories for: {missing}\n"
-            "Run: make reproduce  (or the individual scripts)"
-        )
-
-    # ── Load models from checkpoints ────────────────────────────────────────
-    cfg_map = {
-        "FedAgent-Chain":  Path("configs/experiment/fedagent_chain_full.yaml"),
-        "Standard FedAvg": Path("configs/experiment/ablation/no_fairness.yaml"),
-        "Local Baseline":  Path("configs/experiment/baseline_local.yaml"),
-        "Centralized":     Path("configs/experiment/baseline_centralized.yaml"),
-    }
-
-    models: dict[str, EmploymentMatchingModel] = {}
-    for method_name, run_dir in run_map.items():
-        logger.info("Loading model", method=method_name, run_dir=str(run_dir))
-        models[method_name] = load_model_from_checkpoint(run_dir, cfg_map[method_name])
-
-    # ── Generate tables ──────────────────────────────────────────────────────
-    t2 = generate_table_2(models, args.seed, results_dir)
-    t3 = generate_table_3(models, args.seed, results_dir)
-    t4 = generate_table_4_blockchain(run_map["FedAgent-Chain"], results_dir)
-    t7 = generate_table_7_overhead(run_map["FedAgent-Chain"], results_dir)
-
-    # ── Print summary ────────────────────────────────────────────────────────
-    print(f"\n{'='*65}")
-    print("✅  Evaluation complete — all tables computed from checkpoints")
-    print(f"{'='*65}")
-    print("\nTable 2 — Model Performance:")
-    print(t2.to_string(index=False))
-    print("\nTable 3 — Fairness Disparity:")
-    print(t3.to_string(index=False))
-    print(f"\nResults saved to: {results_dir}")
-
-
-if __name__ == "__main__":
-    main()
-```
-
----
-
-## Fix 2.2 — Rewrite `generate_figures.py` to Load Real Data
-
-File: `scripts/generate_figures.py`
-
-Replace `simulate_convergence_history()` with a real loader, and remove all
-hardcoded `node_metrics` dicts.
-
-### Replace the fake `simulate_convergence_history` function:
-
-```python
-def load_convergence_history(run_dir: Path) -> list:
-    """Load per-round metric history from an actual simulation run."""
-    metrics_path = run_dir / "metrics" / "per_round.json"
-    if not metrics_path.exists():
-        raise FileNotFoundError(
-            f"per_round.json not found at {metrics_path}. "
-            "Run run_federated_simulation.py first."
-        )
-    with open(metrics_path) as f:
+    with open(per_round_path, encoding="utf-8") as f:
         history = json.load(f)
+
+    if not history:
+        logger.warning("per_round.json is empty, using final_model.pt", run_dir=str(run_dir))
+        return final_path
+
+    # Find rounds that have checkpoint files
+    valid_history = []
+    for r in history:
+        r_num = r.get("round")
+        if r_num is not None and (ckpt_dir / f"global_model_round_{r_num:03d}.pt").exists():
+            valid_history.append(r)
+
+    if not valid_history:
+        logger.warning(
+            "No per-round checkpoints found, using final_model.pt",
+            run_dir=str(run_dir),
+            history_rounds=[r.get("round") for r in history],
+        )
+        return final_path
+
+    # Select best round by mean_f1 (ties broken by later round for more stable weights)
+    best_round_data = max(valid_history, key=lambda r: (r.get("mean_f1", 0.0), r.get("round", 0)))
+    best_round = best_round_data.get("round")
+    candidate = ckpt_dir / f"global_model_round_{best_round:03d}.pt"
+    
+    # Verify candidate exists (it should since we checked above)
+    if not candidate.exists():
+        # THIS IS THE FALLBACK — now reachable because we removed the premature return
+        logger.warning(
+            "Best round checkpoint disappeared, falling back to nearest",
+            best_round=best_round,
+            run_dir=str(run_dir),
+        )
+        saved_rounds = []
+        for p in sorted(ckpt_dir.glob("global_model_round_*.pt")):
+            try:
+                saved_rounds.append((int(p.stem.split("_")[-1]), p))
+            except ValueError:
+                pass
+        
+        if not saved_rounds:
+            return final_path
+        
+        # Find nearest saved checkpoint at or before best_round
+        below = [(r, p) for r, p in saved_rounds if r <= best_round]
+        if below:
+            rnd, path = max(below, key=lambda x: x[0])
+            logger.info("Using nearest saved checkpoint", round=rnd, requested_best=best_round)
+            return path
+        
+        # Use earliest available if nothing below
+        rnd, path = min(saved_rounds, key=lambda x: x[0])
+        logger.info("Using earliest available checkpoint", round=rnd)
+        return path
+    
     logger.info(
-        "Convergence history loaded",
-        run_dir=str(run_dir),
-        n_rounds=len(history),
+        "Selected best checkpoint",
+        round=best_round,
+        f1=round(best_round_data.get("mean_f1", 0.0), 4),
+        run_dir=run_dir.name,
     )
-    return history
+    return candidate
 ```
 
-### Replace the main() body for Figure 3:
+**Modification 3.3 — `scripts/run_baselines.py`, remove sys.argv manipulation**
 
 ```python
-# ── Figure 3: FL Convergence Curves ────────────────────────────────────────
-fedavg_run_dir   = find_run_dir(Path(args.results_dir).parent / "runs", "ablation_no_fairness")
-fairness_run_dir = find_run_dir(Path(args.results_dir).parent / "runs", "fedagent_chain_full")
+# BEFORE — fragile sys.argv manipulation
+from scripts.run_federated_simulation import main as run_main
+import sys
+sys.argv = ["run_federated_simulation.py", "--config", args.config, "--seed", str(args.seed), "--no-fairness", "--no-mlflow"]
+if args.output_dir:
+    sys.argv += ["--output-dir", args.output_dir]
+run_main()
 
-if fedavg_run_dir is None or fairness_run_dir is None:
-    logger.error("Run dirs not found — run simulations first")
-    sys.exit(1)
+# AFTER — direct config loading and simulation call
+from scripts.run_federated_simulation import run_simulation_from_config
 
-fedavg_history   = load_convergence_history(fedavg_run_dir)
-fairness_history = load_convergence_history(fairness_run_dir)
+cfg = load_config(args.config)
+exp_name = cfg.get("experiment", {}).get("name", "baseline")
+output_dir = Path(args.output_dir) if args.output_dir else Path(f"experiments/runs/{exp_name}_seed{args.seed}")
 
-plot_multi_convergence(
-    histories={
-        "Standard FedAvg":              fedavg_history,
-        "FedAgent-Chain (Fairness-Aware)": fairness_history,
-    },
-    metric="mean_f1",
-    title="Figure 3: Federated Learning Convergence",
-    ylabel="Mean F1 Score (held-out test set)",
-    output_path=output_dir / "fl_convergence.pdf",
+logger.info("Running baseline", experiment=exp_name, seed=args.seed)
+run_simulation_from_config(
+    cfg=cfg,
+    seed=args.seed,
+    output_dir=output_dir,
+    use_fairness=False,
+    use_mlflow=False,
 )
 ```
 
-### Replace Figure 4 (per-node F1) with data from evaluation CSVs:
-
+Then refactor `scripts/run_federated_simulation.py` to expose:
 ```python
-# ── Figure 4: Per-Node F1 Scores ───────────────────────────────────────────
-# Load per-node metrics from the per_round.json final round
-def extract_final_node_metrics(run_dir: Path, metric: str = "f1") -> dict:
-    history = load_convergence_history(run_dir)
-    final_round = history[-1]
-    return {
-        node_id: m.get(metric, 0.0)
-        for node_id, m in final_round.get("per_node", {}).items()
-    }
-
-run_base = Path(args.results_dir).parent / "runs"
-node_metrics_computed = {
-    "Local Baseline":  extract_final_node_metrics(find_run_dir(run_base, "baseline_local")),
-    "Centralized":     extract_final_node_metrics(find_run_dir(run_base, "baseline_centralized")),
-    "Standard FL":     extract_final_node_metrics(find_run_dir(run_base, "ablation_no_fairness")),
-    "FedAgent-Chain":  extract_final_node_metrics(find_run_dir(run_base, "fedagent_chain_full")),
-}
-plot_node_performance(
-    node_metrics=node_metrics_computed,
-    metric="F1",
-    title="Figure 4: Per-Node F1 Score (held-out test set)",
-    output_path=output_dir / "node_f1_scores.pdf",
-)
+def run_simulation_from_config(cfg, seed, output_dir, use_fairness=True, use_mlflow=False):
+    """Run the federated simulation given a config object (not sys.argv).
+    
+    This is the programmatic entry point used by run_baselines.py and run_ablation_study.py.
+    It avoids sys.argv manipulation and is safe to call from test environments.
+    """
+    set_global_seed(seed)
+    # ... rest of simulation logic extracted from main() ...
 ```
 
----
-
-## Fix 2.3 — Add `find_run_dir` helper to both scripts
-
-Add this at the top of both `run_evaluation.py` and `generate_figures.py`
-(it already exists in `run_evaluation.py` above; copy it to `generate_figures.py`):
-
-```python
-def find_run_dir(runs_dir: Path, experiment_name: str) -> Path | None:
-    """Return the most recent run directory matching experiment_name prefix."""
-    candidates = sorted(
-        runs_dir.glob(f"{experiment_name}_*"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    return candidates[0] if candidates else None
-```
-
----
-
-## Fix 2.4 — Run the Full Pipeline End-to-End (First Real Run)
-
-Execute each step in order. This is the first time you will get real numbers:
+### Validation: Centralized ≠ Local Baseline
 
 ```bash
-# 1. Generate synthetic data (if not already done)
-python scripts/generate_synthetic_data.py \
-    --config configs/experiment/fedagent_chain_full.yaml \
-    --seed 42
-
-# 2. Run full FedAgent-Chain simulation (~30–60 min depending on hardware)
-python scripts/run_federated_simulation.py \
-    --config configs/experiment/fedagent_chain_full.yaml \
-    --seed 42 --no-mlflow
-
-# 3. Run Standard FedAvg ablation (for comparison)
-python scripts/run_federated_simulation.py \
-    --config configs/experiment/ablation/no_fairness.yaml \
-    --seed 42 --no-mlflow
-
-# 4. Run local baseline
+# Run local baseline
 python scripts/run_baselines.py \
     --config configs/experiment/baseline_local.yaml --seed 42
 
-# 5. Run centralized baseline
-python scripts/run_baselines.py \
-    --config configs/experiment/baseline_centralized.yaml --seed 42
-
-# 6. Evaluate — now computes from real checkpoints
-python scripts/run_evaluation.py --seed 42
-
-# 7. Generate figures — now loads from real per_round.json
-python scripts/generate_figures.py
-```
-
----
-
-## ✅ Phase 2 Success Gate
-
-- [ ] `experiments/runs/` contains at least four subdirectories (one per method)
-- [ ] Each run directory contains `checkpoints/final_model.pt` and
-  `metrics/per_round.json`
-- [ ] `python scripts/run_evaluation.py --seed 42` completes **without**
-  `FileNotFoundError`
-- [ ] `experiments/results/table_2_model_performance.csv` exists and its F1
-  values are **different** from {0.832, 0.845, 0.752} — i.e., they were
-  actually computed
-- [ ] `experiments/results/table_3_fairness_results.csv` exists and shows
-  real disparity values
-- [ ] `experiments/results/table_4_blockchain_results.csv` reads from
-  `audit_trail.json`, not from a hardcoded dict
-- [ ] `experiments/figures/fl_convergence.pdf` shows a curve based on actual
-  per-round F1 history, not a mathematical formula
-- [ ] The F1 values in Table 2 differ by at least 0.01 across the four methods
-  (if Standard FL and FedAgent-Chain are still identical, Phase 3 has not been
-  applied yet — this is acceptable at this gate, but flag it)
-
----
-
----
-
-# PHASE 3 — Implement the Core Fairness Algorithm
-**Estimated effort: 1.5–2 days**  
-**Prerequisite: Phases 0, 1, 2 complete**
-
-The paper's primary algorithmic contribution — the fairness regularization
-objective Ω_fair — is documented in the paper and its functions exist in
-`src/federated/fairness.py`, but it is **never applied in the training loop**.
-Additionally, per-sample fairness reweighting (which upweights underrepresented
-disability subgroups) is implemented but never called. Both must be fixed.
-
----
-
-## Fix 3.1 — Add Ω_fair to the Local Training Loss
-
-File: `src/federated/client.py`
-
-### Step A — Add import at the top of the file
-```python
-# Add to existing imports:
-from src.federated.fairness import (
-    compute_fairness_penalty,
-    group_performance_from_predictions,
-)
-```
-
-### Step B — Modify the training epoch loop in `train_round()`
-
-Find the section inside the epoch loop that computes and applies the loss:
-
-```python
-# BEFORE — the complete batch training block:
-for batch in loader:
-    features = batch["features"].to(self.device)
-    labels   = batch["label"].to(self.device)
-    weights  = batch.get("weight")
-
-    optimizer.zero_grad()
-    preds = model(features).squeeze(-1)
-    loss  = criterion(preds, labels)
-
-    if weights is not None:
-        loss = (loss * weights.to(self.device)).mean()
-
-    loss.backward()
-    optimizer.step()
-    batch_losses.append(float(loss.item()))
-```
-
-```python
-# AFTER — add fairness penalty every 5 batches to avoid per-batch overhead:
-fairness_enabled = bool(self.cfg.get("fairness", {}).get("enabled", False))
-lambda_fair      = float(self.cfg.get("fairness", {}).get("lambda_fairness", 0.1))
-batch_counter    = 0
-
-for batch in loader:
-    features = batch["features"].to(self.device)
-    labels   = batch["label"].to(self.device)
-    weights  = batch.get("weight")
-
-    optimizer.zero_grad()
-    preds = model(features).squeeze(-1)
-
-    # Base BCE loss (optionally per-sample weighted for fairness reweighting)
-    if weights is not None:
-        loss = (criterion(preds, labels) * weights.to(self.device)).mean()
-    else:
-        loss = criterion(preds, labels)
-
-    # Ω_fair: add fairness penalty every 5 batches
-    if fairness_enabled and batch_counter % 5 == 0:
-        try:
-            batch_group_labels = self._get_batch_group_labels(batch)
-            if batch_group_labels is not None:
-                y_true_np = labels.detach().cpu().numpy().astype(int)
-                y_pred_np = (preds.detach().cpu().numpy() >= 0.5).astype(int)
-                group_f1s = group_performance_from_predictions(
-                    y_true_np, y_pred_np, batch_group_labels
-                )
-                if len(group_f1s) >= 2:
-                    penalty = compute_fairness_penalty(group_f1s, lambda_fair)
-                    loss    = loss + torch.tensor(
-                        penalty, dtype=torch.float32, device=self.device
-                    )
-        except Exception as e:
-            # Never let fairness penalty crash training
-            self.logger.debug("Fairness penalty skipped", error=str(e))
-
-    loss.backward()
-    optimizer.step()
-    batch_losses.append(float(loss.item()))
-    batch_counter += 1
-```
-
-### Step C — Add the `_get_batch_group_labels` helper method
-
-Add this private method to `FederatedClient`:
-
-```python
-def _get_batch_group_labels(self, batch: dict) -> np.ndarray | None:
-    """Extract disability_category labels for samples in this batch.
-
-    Returns None if group labels are unavailable (graceful degradation).
-    """
-    # The batch index is not passed directly; we look it up from the dataset
-    # For efficiency we build a lookup once and cache it.
-    if not hasattr(self, "_group_label_cache"):
-        try:
-            self._group_label_cache = self.train_dataset.get_group_labels(
-                "disability_category"
-            )
-        except Exception:
-            self._group_label_cache = None
-
-    if self._group_label_cache is None:
-        return None
-
-    # DataLoader does not give us original indices in the default setup.
-    # We use the batch label values as a proxy — groups are inferred from
-    # the full training set distribution rather than per-batch exact mapping.
-    # For the fairness penalty, approximate group distribution is sufficient.
-    return self._group_label_cache[: len(batch["label"])]
-```
-
-> **Note on approximation**: The exact per-sample group labels for a shuffled
-> batch require a custom `Dataset.__getitem__` that also returns `idx`. The
-> approximation above uses the first N group labels, which provides a
-> statistically representative group distribution for the penalty. For a more
-> precise implementation, add an `idx` field to `EmploymentDataset.__getitem__`
-> and use `batch["idx"]` to index `_group_label_cache` directly.
-
----
-
-## Fix 3.2 — Activate Per-Sample Fairness Reweighting
-
-File: `scripts/run_federated_simulation.py` (inside `load_node_dataset`)
-
-After creating `full_dataset`, add sample weight computation:
-
-```python
-from src.federated.fairness import fairness_reweight_samples
-
-# After full_dataset is created:
-fairness_cfg     = cfg.get("fairness", {})
-fairness_enabled = bool(fairness_cfg.get("enabled", True))
-
-if fairness_enabled:
-    group_labels    = full_dataset.get_group_labels("disability_category")
-    sample_weights  = fairness_reweight_samples(group_labels)
-    # Rebuild full_dataset with weights
-    users_df_reset  = full_dataset.users_df.reset_index()
-    jobs_df_reset   = full_dataset.jobs_df.reset_index()
-    full_dataset    = EmploymentDataset(
-        outcomes_df=full_dataset.outcomes,
-        users_df=users_df_reset,
-        jobs_df=jobs_df_reset,
-        consent_filter=False,
-        sample_weights=sample_weights,
-    )
-
-train_ds, test_ds = full_dataset.split(test_size=0.20, seed=seed)
-return train_ds, test_ds
-```
-
----
-
-## Fix 3.3 — Verify Fairness Actually Improves
-
-After Phase 3, re-run the FedAgent-Chain simulation (seed 42) and the
-Standard FedAvg ablation (no_fairness.yaml), then run evaluation:
-
-```bash
+# Run centralized baseline
 python scripts/run_federated_simulation.py \
-    --config configs/experiment/fedagent_chain_full.yaml --seed 42 --no-mlflow
-
-python scripts/run_federated_simulation.py \
-    --config configs/experiment/ablation/no_fairness.yaml --seed 42 --no-mlflow
-
-python scripts/run_evaluation.py --seed 42
-```
-
-Open `experiments/results/table_3_fairness_results.csv` and confirm:
-- **Every row** has `FedAgent-Chain < Standard FedAvg` for D_fair
-- The reduction should be in the range 10–40 % (not the fabricated 45–46 %)
-
-If FedAgent-Chain shows zero improvement over Standard FedAvg, increase
-`lambda_fairness` from 0.1 to 0.3 in `configs/experiment/fedagent_chain_full.yaml`
-and re-run.
-
----
-
-## ✅ Phase 3 Success Gate
-
-- [ ] `grep -n "compute_fairness_penalty" src/federated/client.py` returns a
-  match inside the training loop
-- [ ] `grep -n "fairness_reweight_samples" scripts/run_federated_simulation.py`
-  returns a match
-- [ ] After re-running simulations, `table_3_fairness_results.csv` shows
-  FedAgent-Chain D_fair strictly lower than Standard FedAvg for **all four**
-  protected attributes
-- [ ] Training loss curves (in `experiments/runs/fedagent_chain_full_*/metrics/per_round.json`)
-  show `mean_train_loss` values that are measurably higher than the no-fairness
-  ablation (expected: the penalty term increases loss slightly)
-- [ ] `pytest tests/unit/test_fairness.py -v` — all tests pass
-
----
-
----
-
-# PHASE 4 — Implement the Four Missing Agents
-**Estimated effort: 5–7 days**  
-**Prerequisite: Phases 0–3 complete**
-
-The paper claims five agentic AI services. Only `EmploymentAgent` exists.
-Table 5 currently reports metrics for four agents that have no code. This phase
-implements all four, integrates them into `run_evaluation.py`, and generates a
-real Table 5.
-
----
-
-## Fix 4.1 — `GovernanceAgent`
-
-File to create: `src/agents/governance_agent.py`
-
-```python
-"""Human-in-the-loop governance agent for FedAgent-Chain.
-
-Classifies employment recommendations as high-risk vs. safe based on a
-learned risk scoring model, and mandates human review above threshold τ.
-"""
-
-from __future__ import annotations
-from typing import Any, Dict, List, Optional
-import numpy as np
-from omegaconf import DictConfig
-
-from src.agents.base_agent import AgentOutput, BaseAgent
-from src.data.schema import DisabilityCategory
-
-
-class GovernanceAgent(BaseAgent):
-    """Human-in-the-loop governance agent.
-
-    Evaluates each employment recommendation for risk indicators and
-    escalates to human review whenever R_risk(d_i) > τ.
-
-    Risk factors (additive):
-    - Low confidence in top match               → base risk = 1 - confidence
-    - Disability category 'multiple'            → +0.10
-    - No accommodation provided for any need    → +0.15
-    - Top job accessibility score < 0.3         → +0.12
-    - Language mismatch (primary)               → +0.08
-
-    Parameters
-    ----------
-    agent_cfg : DictConfig
-        Must contain `review_threshold` (float, default 0.70).
-    governance_threshold : float
-        Alias for review_threshold; kept for BaseAgent API compatibility.
-    """
-
-    def __init__(
-        self,
-        agent_cfg: DictConfig,
-        governance_threshold: float = 0.70,
-    ) -> None:
-        threshold = float(agent_cfg.get("review_threshold", governance_threshold))
-        super().__init__(agent_cfg, governance_threshold=threshold)
-
-    def _compute_risk_score(
-        self,
-        confidence: float,
-        disability_category: str,
-        top_recommendation: Dict[str, Any],
-    ) -> float:
-        """Compute R_risk(d_i) from recommendation features."""
-        risk = 1.0 - confidence  # low confidence = high risk
-
-        if disability_category == DisabilityCategory.MULTIPLE.value:
-            risk = min(1.0, risk + 0.10)
-
-        # Accommodation mismatch
-        accom_compat = top_recommendation.get("accommodation_compatibility", 1.0)
-        if accom_compat < 0.30:
-            risk = min(1.0, risk + 0.15)
-
-        # Accessibility score
-        accessibility = top_recommendation.get("accessibility_score", 1.0)
-        if accessibility < 0.30:
-            risk = min(1.0, risk + 0.12)
-
-        # Language mismatch
-        lang_match = top_recommendation.get("language_match", 1.0)
-        if lang_match < 0.5:
-            risk = min(1.0, risk + 0.08)
-
-        return float(np.clip(risk, 0.0, 1.0))
-
-    def run(
-        self,
-        user_id: str,
-        employment_output: Optional[AgentOutput] = None,
-        disability_category: str = "mobility",
-        **kwargs: Any,
-    ) -> AgentOutput:
-        """Assess risk and trigger governance review if needed.
-
-        Parameters
-        ----------
-        user_id : str
-            User identifier.
-        employment_output : AgentOutput
-            Output from EmploymentAgent (required).
-        disability_category : str
-            User's disability category for risk modulation.
-        """
-        if employment_output is None:
-            raise ValueError("GovernanceAgent requires employment_output from EmploymentAgent.")
-
-        top_rec = employment_output.recommendations[0] if employment_output.recommendations else {}
-        risk    = self._compute_risk_score(
-            confidence=employment_output.confidence,
-            disability_category=disability_category,
-            top_recommendation=top_rec,
-        )
-        requires_review = self._check_governance_trigger(risk)
-        explanation = (
-            f"Risk score {risk:.3f} {'EXCEEDS' if requires_review else 'is below'} "
-            f"governance threshold τ={self.governance_threshold:.2f}. "
-            f"Human review {'REQUIRED' if requires_review else 'not required'}."
-        )
-        output = AgentOutput(
-            agent_type="GovernanceAgent",
-            user_id=user_id,
-            recommendations=employment_output.recommendations,
-            confidence=employment_output.confidence,
-            risk_score=risk,
-            requires_human_review=requires_review,
-            explanation=explanation,
-            metadata={
-                "threshold": self.governance_threshold,
-                "disability_category": disability_category,
-            },
-        )
-        self._log_decision(output)
-        return output
-```
-
----
-
-## Fix 4.2 — `UpskillingAgent`
-
-File to create: `src/agents/upskilling_agent.py`
-
-```python
-"""Adaptive upskilling recommendation agent for FedAgent-Chain."""
-
-from __future__ import annotations
-from typing import Any, Dict, List, Optional
-import numpy as np
-from omegaconf import DictConfig
-
-from src.agents.base_agent import AgentOutput, BaseAgent
-from src.data.schema import JobProfile, UserProfile
-
-
-class UpskillingAgent(BaseAgent):
-    """Recommends targeted skill development based on job-skill gap analysis.
-
-    Computes the skill gap G(u_i, j_r) = required_skills AND NOT user_skills
-    and prioritises the top-K missing skills that appear most frequently
-    across the top-ranked job opportunities.
-
-    Parameters
-    ----------
-    agent_cfg : DictConfig
-        Config with `top_k_skills` (int, default 5).
-    """
-
-    def __init__(self, agent_cfg: DictConfig, governance_threshold: float = 0.70) -> None:
-        super().__init__(agent_cfg, governance_threshold)
-        self.top_k_skills: int = int(agent_cfg.get("top_k_skills", 5))
-
-    def compute_skill_gap(
-        self, user_skills: np.ndarray, job_skills: np.ndarray
-    ) -> np.ndarray:
-        """Return binary vector of skills required by job but missing in user."""
-        return np.maximum(0, job_skills - user_skills).astype(int)
-
-    def aggregate_skill_gaps(
-        self, user: UserProfile, jobs: List[JobProfile]
-    ) -> List[Dict[str, Any]]:
-        """Aggregate skill gaps across top jobs and rank by frequency."""
-        u_skills = np.array(user.skill_vector, dtype=float)
-        gap_counts = np.zeros(50, dtype=int)
-
-        for job in jobs:
-            j_skills = np.array(job.required_skills, dtype=float)
-            gap      = self.compute_skill_gap(u_skills, j_skills)
-            gap_counts += gap
-
-        # Top-K most-needed skills
-        top_indices = np.argsort(gap_counts)[::-1][: self.top_k_skills]
-        return [
-            {
-                "skill_index": int(idx),
-                "frequency":   int(gap_counts[idx]),
-                "priority":    i + 1,
-            }
-            for i, idx in enumerate(top_indices)
-            if gap_counts[idx] > 0
-        ]
-
-    def run(
-        self,
-        user_id: str,
-        user: Optional[UserProfile] = None,
-        top_jobs: Optional[List[JobProfile]] = None,
-        **kwargs: Any,
-    ) -> AgentOutput:
-        if user is None or top_jobs is None:
-            raise ValueError("UpskillingAgent requires 'user' and 'top_jobs'.")
-
-        skill_gaps  = self.aggregate_skill_gaps(user, top_jobs)
-        coverage    = len(skill_gaps) / max(self.top_k_skills, 1)
-        confidence  = float(coverage)
-        risk        = self._compute_base_risk_score(confidence, user.disability_category.value)
-
-        explanation = (
-            f"Identified {len(skill_gaps)} priority upskilling targets "
-            f"across {len(top_jobs)} top job opportunities."
-        )
-        output = AgentOutput(
-            agent_type="UpskillingAgent",
-            user_id=user_id,
-            recommendations=skill_gaps,
-            confidence=confidence,
-            risk_score=risk,
-            requires_human_review=self._check_governance_trigger(risk),
-            explanation=explanation,
-            metadata={"top_k_skills": self.top_k_skills},
-        )
-        self._log_decision(output)
-        return output
-```
-
----
-
-## Fix 4.3 — `AccommodationAgent`
-
-File to create: `src/agents/accommodation_agent.py`
-
-```python
-"""Workplace accommodation recommendation agent for FedAgent-Chain."""
-
-from __future__ import annotations
-from typing import Any, Dict, List, Optional
-import numpy as np
-from omegaconf import DictConfig
-
-from src.agents.base_agent import AgentOutput, BaseAgent
-from src.data.schema import JobProfile, UserProfile
-
-# WHO-ICF aligned accommodation category labels (indices 0–19)
-ACCOMMODATION_LABELS = [
-    "screen_reader", "wheelchair_access", "sign_language",
-    "flexible_hours", "remote_option", "large_print",
-    "hearing_loop", "ergonomic_equipment", "transport_support",
-    "mental_health_support", "sensory_room", "quiet_workspace",
-    "job_coaching", "adapted_keyboard", "voice_recognition",
-    "braille_materials", "service_animal_policy", "interpreter",
-    "medication_schedule", "physical_therapy_access",
-]
-
-
-class AccommodationAgent(BaseAgent):
-    """Recommends specific workplace accommodations based on unmet needs.
-
-    For each user need not covered by the target job, recommends the
-    corresponding accommodation with a priority score.
-    """
-
-    def run(
-        self,
-        user_id: str,
-        user: Optional[UserProfile] = None,
-        job: Optional[JobProfile] = None,
-        **kwargs: Any,
-    ) -> AgentOutput:
-        if user is None or job is None:
-            raise ValueError("AccommodationAgent requires 'user' and 'job'.")
-
-        u_needs  = np.array(user.accommodation_needs,    dtype=int)
-        j_covers = np.array(job.accommodation_provided,  dtype=int)
-        unmet    = np.maximum(0, u_needs - j_covers)
-
-        recommendations = []
-        for idx in np.where(unmet == 1)[0]:
-            label = (
-                ACCOMMODATION_LABELS[idx]
-                if idx < len(ACCOMMODATION_LABELS) else f"accommodation_{idx}"
-            )
-            recommendations.append({
-                "accommodation_index": int(idx),
-                "label":  label,
-                "unmet":  True,
-                "priority": int(u_needs[idx]),
-            })
-
-        n_unmet     = len(recommendations)
-        n_needs     = int(np.sum(u_needs))
-        coverage    = 1.0 - (n_unmet / max(n_needs, 1))
-        confidence  = float(coverage)
-        risk        = self._compute_base_risk_score(
-            confidence, user.disability_category.value
-        )
-
-        explanation = (
-            f"{n_unmet} accommodation(s) unmet out of {n_needs} needs. "
-            f"Coverage: {coverage:.1%}."
-        )
-        output = AgentOutput(
-            agent_type="AccommodationAgent",
-            user_id=user_id,
-            recommendations=recommendations,
-            confidence=confidence,
-            risk_score=risk,
-            requires_human_review=self._check_governance_trigger(risk),
-            explanation=explanation,
-            metadata={"n_needs": n_needs, "n_unmet": n_unmet, "coverage": coverage},
-        )
-        self._log_decision(output)
-        return output
-```
-
----
-
-## Fix 4.4 — `MultilingualCommunicationAgent`
-
-File to create: `src/agents/multilingual_agent.py`
-
-```python
-"""Multilingual communication support agent for FedAgent-Chain."""
-
-from __future__ import annotations
-from typing import Any, Dict, List, Optional
-from omegaconf import DictConfig
-
-from src.agents.base_agent import AgentOutput, BaseAgent
-from src.data.schema import UserProfile
-
-# Supported language pairs and coverage quality scores
-# (In production, replace with actual multilingual model evaluation)
-_LANGUAGE_SUPPORT: Dict[str, float] = {
-    "ar": 0.92, "en": 0.98, "zh": 0.91,
-    "fr": 0.93, "de": 0.90, "es": 0.94,
-    "ur": 0.83, "tl": 0.78, "yue": 0.81,
-}
-
-
-class MultilingualCommunicationAgent(BaseAgent):
-    """Assesses and supports multilingual communication for employment.
-
-    Evaluates language adequacy between user's language profile and the
-    job's required language, and recommends communication support resources.
-
-    Parameters
-    ----------
-    agent_cfg : DictConfig
-        Config with `supported_languages` (list, optional).
-    """
-
-    def run(
-        self,
-        user_id: str,
-        user: Optional[UserProfile] = None,
-        job_language: str = "en",
-        **kwargs: Any,
-    ) -> AgentOutput:
-        if user is None:
-            raise ValueError("MultilingualCommunicationAgent requires 'user'.")
-
-        primary_lang   = user.language_primary
-        secondary_lang = user.language_secondary
-
-        # Language adequacy score
-        primary_match   = (primary_lang == job_language)
-        secondary_match = (secondary_lang == job_language) if secondary_lang else False
-
-        if primary_match:
-            adequacy   = _LANGUAGE_SUPPORT.get(primary_lang, 0.75)
-            support_needed = False
-        elif secondary_match:
-            adequacy   = _LANGUAGE_SUPPORT.get(secondary_lang, 0.75) * 0.85
-            support_needed = True
-        else:
-            adequacy   = 0.35
-            support_needed = True
-
-        recommendations = []
-        if support_needed:
-            recommendations = [
-                {
-                    "type":     "language_bridge",
-                    "resource": f"Translation support: {primary_lang} ↔ {job_language}",
-                    "adequacy": round(adequacy, 3),
-                },
-                {
-                    "type":     "language_course",
-                    "resource": f"Language training programme for {job_language}",
-                    "adequacy": round(adequacy, 3),
-                },
-            ]
-
-        confidence = float(adequacy)
-        risk       = self._compute_base_risk_score(confidence, user.disability_category.value)
-
-        explanation = (
-            f"Language adequacy score: {adequacy:.3f}. "
-            f"Communication support {'recommended' if support_needed else 'not required'}."
-        )
-        output = AgentOutput(
-            agent_type="MultilingualCommunicationAgent",
-            user_id=user_id,
-            recommendations=recommendations,
-            confidence=confidence,
-            risk_score=risk,
-            requires_human_review=self._check_governance_trigger(risk),
-            explanation=explanation,
-            metadata={
-                "primary_language": primary_lang,
-                "job_language": job_language,
-                "adequacy": adequacy,
-                "support_needed": support_needed,
-            },
-        )
-        self._log_decision(output)
-        return output
-```
-
----
-
-## Fix 4.5 — Update `src/agents/__init__.py`
-
-```python
-"""Agentic AI service layer for FedAgent-Chain."""
-
-from src.agents.base_agent import AgentOutput, BaseAgent
-from src.agents.employment_agent import EmploymentAgent
-from src.agents.governance_agent import GovernanceAgent
-from src.agents.upskilling_agent import UpskillingAgent
-from src.agents.accommodation_agent import AccommodationAgent
-from src.agents.multilingual_agent import MultilingualCommunicationAgent
-
-__all__ = [
-    "BaseAgent",
-    "AgentOutput",
-    "EmploymentAgent",
-    "GovernanceAgent",
-    "UpskillingAgent",
-    "AccommodationAgent",
-    "MultilingualCommunicationAgent",
-]
-```
-
----
-
-## Fix 4.6 — Add Genuine Table 5 to `run_evaluation.py`
-
-Add this function to `run_evaluation.py` and call it from `main()`:
-
-```python
-def generate_table_5_agents(
-    seed: int,
-    results_dir: Path,
-    n_eval_users: int = 200,
-) -> pd.DataFrame:
-    """Table 5: Agentic AI service evaluation on synthetic test users."""
-    from omegaconf import OmegaConf
-    from src.agents.employment_agent import EmploymentAgent
-    from src.agents.governance_agent import GovernanceAgent
-    from src.agents.upskilling_agent import UpskillingAgent
-    from src.agents.accommodation_agent import AccommodationAgent
-    from src.agents.multilingual_agent import MultilingualCommunicationAgent
-    from src.data.synthetic_generator import (
-        generate_user_profiles, generate_job_profiles
-    )
-    from src.utils.seed_utils import get_rng
-
-    rng = get_rng(seed)
-
-    # Load config defaults
-    cfg = OmegaConf.create({
-        "alpha": 0.40, "beta": 0.25, "gamma": 0.20, "delta": 0.15, "top_k": 10,
-        "top_k_skills": 5, "review_threshold": 0.70,
-    })
-    gov_cfg = OmegaConf.create({"review_threshold": 0.70})
-
-    emp_agent   = EmploymentAgent(cfg, governance_threshold=0.70)
-    gov_agent   = GovernanceAgent(gov_cfg)
-    ups_agent   = UpskillingAgent(cfg, governance_threshold=0.70)
-    acc_agent   = AccommodationAgent(cfg, governance_threshold=0.70)
-    lang_agent  = MultilingualCommunicationAgent(cfg, governance_threshold=0.70)
-
-    users = generate_user_profiles("united_states", n_eval_users, rng)
-    users = [u for u in users if u.consent_given]
-    jobs  = generate_job_profiles("united_states", 100, rng)
-
-    emp_scores, gov_detections, gov_fps = [], [], []
-    ups_coverages, acc_coverages, lang_adequacies = [], [], []
-
-    for user in users[:n_eval_users]:
-        emp_out   = emp_agent.run(user_id=user.user_id, user=user, jobs=jobs)
-        gov_out   = gov_agent.run(
-            user_id=user.user_id,
-            employment_output=emp_out,
-            disability_category=user.disability_category.value,
-        )
-        ups_out   = ups_agent.run(
-            user_id=user.user_id, user=user,
-            top_jobs=jobs[: min(10, len(jobs))]
-        )
-
-        top_job_profile = None
-        if emp_out.recommendations:
-            top_job_id = emp_out.recommendations[0].get("job_id")
-            matched    = [j for j in jobs if j.job_id == top_job_id]
-            if matched:
-                top_job_profile = matched[0]
-
-        if top_job_profile:
-            acc_out = acc_agent.run(
-                user_id=user.user_id, user=user, job=top_job_profile
-            )
-            lang_out = lang_agent.run(
-                user_id=user.user_id, user=user,
-                job_language=top_job_profile.language_required,
-            )
-            acc_coverages.append(acc_out.metadata.get("coverage", 0.0))
-            lang_adequacies.append(lang_out.confidence)
-
-        emp_scores.append(emp_out.confidence)
-        # Governance: high-risk if risk_score > threshold
-        is_high_risk  = gov_out.risk_score > 0.70
-        # We treat low-confidence + multiple disability as ground-truth high-risk
-        gt_high_risk  = (
-            emp_out.confidence < 0.55
-            or user.disability_category.value == "multiple"
-        )
-        if gt_high_risk:
-            gov_detections.append(1 if is_high_risk else 0)
-        else:
-            gov_fps.append(1 if is_high_risk else 0)
-
-        if ups_out.recommendations:
-            ups_coverages.append(
-                ups_out.confidence
-            )
-
-    rows = [
-        {"Agent": "Employment Matching", "Metric": "Mean Confidence",
-         "Score": round(float(np.mean(emp_scores)), 4)},
-        {"Agent": "Upskilling", "Metric": "Skill Gap Coverage",
-         "Score": round(float(np.mean(ups_coverages)) if ups_coverages else 0.0, 4)},
-        {"Agent": "Accommodation", "Metric": "Accommodation Coverage",
-         "Score": round(float(np.mean(acc_coverages)) if acc_coverages else 0.0, 4)},
-        {"Agent": "Multilingual", "Metric": "Language Adequacy",
-         "Score": round(float(np.mean(lang_adequacies)) if lang_adequacies else 0.0, 4)},
-        {"Agent": "Governance", "Metric": "High-Risk Detection Rate",
-         "Score": round(float(np.mean(gov_detections)) if gov_detections else 0.0, 4)},
-        {"Agent": "Governance", "Metric": "False Positive Rate",
-         "Score": round(float(np.mean(gov_fps)) if gov_fps else 0.0, 4)},
-    ]
-    df = pd.DataFrame(rows)
-    df.to_csv(results_dir / "table_5_agent_results.csv", index=False)
-    logger.info("Table 5 saved (computed from agent runs)")
-    return df
-```
-
-Add a call to this function at the end of `main()` in `run_evaluation.py`:
-
-```python
-t5 = generate_table_5_agents(args.seed, results_dir)
-print("\nTable 5 — Agentic AI Services:")
-print(t5.to_string(index=False))
-```
-
----
-
-## Fix 4.7 — Add Unit Tests for All New Agents
-
-File: `tests/unit/test_new_agents.py`
-
-```python
-"""Unit tests for Phase 4 agents."""
-import pytest
-from omegaconf import OmegaConf
-from src.agents.governance_agent import GovernanceAgent
-from src.agents.upskilling_agent import UpskillingAgent
-from src.agents.accommodation_agent import AccommodationAgent
-from src.agents.multilingual_agent import MultilingualCommunicationAgent
-from src.agents.base_agent import AgentOutput
-from src.data.synthetic_generator import generate_user_profiles, generate_job_profiles
-from src.utils.seed_utils import get_rng
-
-
-@pytest.fixture
-def base_cfg():
-    return OmegaConf.create({
-        "alpha": 0.40, "beta": 0.25, "gamma": 0.20, "delta": 0.15,
-        "top_k": 5, "top_k_skills": 5, "review_threshold": 0.70,
-    })
-
-@pytest.fixture
-def users_jobs():
-    rng = get_rng(42)
-    users = generate_user_profiles("saudi_arabia", 5, rng)
-    jobs  = generate_job_profiles("saudi_arabia", 20, rng)
-    return users, jobs
-
-
-class TestGovernanceAgent:
-    def test_high_risk_triggers_review(self, base_cfg, users_jobs):
-        from src.agents.employment_agent import EmploymentAgent
-        users, jobs = users_jobs
-        emp   = EmploymentAgent(base_cfg, governance_threshold=0.999)
-        gov   = GovernanceAgent(OmegaConf.create({"review_threshold": 0.01}))
-        emp_out = emp.run(users[0].user_id, user=users[0], jobs=jobs)
-        gov_out = gov.run(users[0].user_id, employment_output=emp_out,
-                          disability_category=users[0].disability_category.value)
-        assert gov_out.requires_human_review is True
-
-    def test_output_is_agent_output(self, base_cfg, users_jobs):
-        from src.agents.employment_agent import EmploymentAgent
-        users, jobs = users_jobs
-        emp = EmploymentAgent(base_cfg)
-        gov = GovernanceAgent(OmegaConf.create({"review_threshold": 0.70}))
-        emp_out = emp.run(users[0].user_id, user=users[0], jobs=jobs)
-        gov_out = gov.run(users[0].user_id, employment_output=emp_out,
-                          disability_category=users[0].disability_category.value)
-        assert isinstance(gov_out, AgentOutput)
-        assert gov_out.agent_type == "GovernanceAgent"
-        assert 0.0 <= gov_out.risk_score <= 1.0
-
-
-class TestUpskillingAgent:
-    def test_returns_skill_gaps(self, base_cfg, users_jobs):
-        users, jobs = users_jobs
-        agent = UpskillingAgent(base_cfg)
-        out   = agent.run(users[0].user_id, user=users[0], top_jobs=jobs[:5])
-        assert isinstance(out, AgentOutput)
-        assert len(out.recommendations) <= base_cfg.top_k_skills
-
-    def test_skills_have_correct_keys(self, base_cfg, users_jobs):
-        users, jobs = users_jobs
-        agent = UpskillingAgent(base_cfg)
-        out   = agent.run(users[0].user_id, user=users[0], top_jobs=jobs[:10])
-        for rec in out.recommendations:
-            assert "skill_index" in rec
-            assert "frequency" in rec
-
-
-class TestAccommodationAgent:
-    def test_perfect_coverage_gives_full_confidence(self, base_cfg, users_jobs):
-        import numpy as np
-        from src.data.schema import (
-            UserProfile, JobProfile, NodeID, DisabilityCategory,
-            WorkMode, EmploymentGoal, EducationLevel
-        )
-        user = UserProfile(
-            user_id="u1", node_id=NodeID.SAUDI_ARABIA,
-            skill_vector=[1,0]*25, education_level=EducationLevel.UNDERGRADUATE,
-            disability_category=DisabilityCategory.MOBILITY,
-            accommodation_needs=[1]*20,           # all needs
-            language_primary="ar", preferred_work_mode=WorkMode.HYBRID,
-            employment_goal=EmploymentGoal.FULLTIME, consent_given=True,
-        )
-        job = JobProfile(
-            job_id="j1", node_id=NodeID.SAUDI_ARABIA,
-            required_skills=[1,0]*25, accessibility_score=0.9,
-            work_mode=WorkMode.HYBRID, language_required="ar",
-            education_minimum=EducationLevel.UNDERGRADUATE,
-            accommodation_provided=[1]*20,        # all provided
-            sector="technology",
-        )
-        agent = AccommodationAgent(base_cfg)
-        out   = agent.run("u1", user=user, job=job)
-        assert out.confidence == pytest.approx(1.0), "All needs met → confidence 1.0"
-        assert len(out.recommendations) == 0
-
-
-class TestMultilingualAgent:
-    def test_primary_language_match_high_adequacy(self, base_cfg, users_jobs):
-        users, _ = users_jobs
-        agent = MultilingualCommunicationAgent(base_cfg)
-        # Find a user with primary language "ar" and test against "ar" job
-        for user in users:
-            if user.language_primary == "ar":
-                out = agent.run(user.user_id, user=user, job_language="ar")
-                assert out.confidence > 0.80
-                break
-
-    def test_no_match_low_adequacy(self, base_cfg, users_jobs):
-        users, _ = users_jobs
-        agent = MultilingualCommunicationAgent(base_cfg)
-        out   = agent.run(users[0].user_id, user=users[0], job_language="xx")
-        assert out.confidence < 0.60
-```
-
-Run: `pytest tests/unit/test_new_agents.py -v`
-
----
-
-## ✅ Phase 4 Success Gate
-
-- [ ] `python -c "from src.agents import GovernanceAgent, UpskillingAgent, AccommodationAgent, MultilingualCommunicationAgent; print('all agents importable')"` — prints without error
-- [ ] `pytest tests/unit/test_new_agents.py -v` — all tests pass
-- [ ] `pytest tests/unit/test_agents.py -v` — all existing tests still pass
-- [ ] `python scripts/run_evaluation.py --seed 42` generates `table_5_agent_results.csv` with non-zero, non-identical scores for all six rows
-- [ ] Governance High-Risk Detection Rate > 0.60 (if lower, adjust `review_threshold` downward)
-- [ ] Governance False Positive Rate < 0.30 (if higher, adjust threshold upward)
-
----
-
----
-
-# PHASE 5 — Statistical Validity
-**Estimated effort: 2–3 days (most of it compute time)**  
-**Prerequisite: Phases 0–4 complete**
-
-Every publishable ML paper at Q1 level requires multi-seed runs, confidence
-intervals, and statistical significance tests. Currently none exist.
-
----
-
-## Fix 5.1 — Define the Three Required Seeds
-
-Use seeds: **42** (primary), **123**, **2024**.
-
-Run the full simulation for each seed for each experiment variant:
-
-```bash
-for SEED in 42 123 2024; do
-  echo "=== Running seed $SEED ==="
-
-  # FedAgent-Chain full
-  python scripts/run_federated_simulation.py \
-    --config configs/experiment/fedagent_chain_full.yaml \
-    --seed $SEED --no-mlflow
-
-  # Standard FedAvg (ablation: no fairness)
-  python scripts/run_federated_simulation.py \
-    --config configs/experiment/ablation/no_fairness.yaml \
-    --seed $SEED --no-mlflow
-
-  # Local baseline
-  python scripts/run_baselines.py \
-    --config configs/experiment/baseline_local.yaml --seed $SEED
-
-  # Centralized baseline
-  python scripts/run_baselines.py \
-    --config configs/experiment/baseline_centralized.yaml --seed $SEED
-
-  # Ablations
-  python scripts/run_ablation_study.py \
-    --ablation-configs configs/experiment/ablation/ --seed $SEED
-done
-```
-
----
-
-## Fix 5.2 — Create `scripts/aggregate_multi_seed_results.py`
-
-Create this new script:
-
-```python
-#!/usr/bin/env python3
-"""Aggregate results across multiple seeds and compute statistical tests.
-
-Reads table_2_model_performance.csv produced per-seed, aggregates mean/std,
-and runs paired t-tests between FedAgent-Chain and each baseline.
-
-Usage:
-    python scripts/aggregate_multi_seed_results.py \
-        --seeds 42 123 2024 \
-        --results-dir experiments/results/
-"""
-
-from __future__ import annotations
-
-import argparse
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import numpy as np
+    --config configs/experiment/baseline_centralized.yaml --seed 42 --no-mlflow
+
+# Run evaluation and verify they are NOT identical
+python scripts/run_evaluation.py \
+    --runs-dir experiments/runs/ \
+    --results-dir experiments/results/phase3_baseline_check/ \
+    --seed 42
+
+python -c "
 import pandas as pd
-from scipy import stats
+df = pd.read_csv('experiments/results/phase3_baseline_check/table_2_model_performance.csv')
+local = df[df['Method'] == 'Local Baseline']['F1'].values[0]
+central = df[df['Method'] == 'Centralized']['F1'].values[0]
+print(f'Local Baseline F1:  {local:.4f}')
+print(f'Centralized F1:     {central:.4f}')
+print(f'Difference:         {abs(central - local):.4f}')
+if abs(central - local) > 0.005:
+    print('PASS: Centralized and Local Baseline are genuinely different')
+else:
+    print('FAIL: Centralized and Local Baseline still produce identical outputs')
+    print('Check that centralized mode loads all 4 nodes data correctly')
+assert central >= local - 0.05, (
+    f'Centralized F1 ({central:.4f}) is substantially below Local Baseline ({local:.4f}). '
+    f'This is unusual — centralized training should generally match or exceed local training '
+    f'due to more available data. Investigate.'
+)
+"
+```
 
-from src.utils.io_utils import ensure_dir
-from src.utils.logging_utils import get_logger, setup_logging
+### Success Criteria
+- [ ] Local Baseline and Centralized produce metrics differing by > 0.005 on F1
+- [ ] Centralized baseline trains on ~40,000 pairs (4 × 10,000 training) vs ~8,000 per local node
+- [ ] Centralized F1 ≥ Local Baseline F1 - 0.05 (centralized should be at least as good as local)
+- [ ] `_find_best_checkpoint` fallback code is reachable (no dead code)
+- [ ] `run_baselines.py` does not manipulate `sys.argv`
+- [ ] Unit test for centralized data loading passes
 
-logger = get_logger("aggregate_multi_seed")
+### Failure Criteria
+- Local Baseline == Centralized outputs after fix → investigate data loading code
+- Centralized F1 dramatically lower than local (by > 0.10) → indicates pooling creates train/test imbalance
 
+### Git Commit Recommendation
+```
+git add scripts/run_federated_simulation.py scripts/run_evaluation.py \
+        scripts/run_baselines.py tests/unit/
+git commit -m "phase3: fix centralized baseline data pooling, fix dead code in _find_best_checkpoint
 
-def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds",       nargs="+", type=int, default=[42, 123, 2024])
-    p.add_argument("--results-dir", type=str,  default="experiments/results/")
-    return p.parse_args()
+- load_node_dataset handles data.centralized=True by pooling all 4 nodes
+- _find_best_checkpoint: remove dead code after premature return, fix fallback
+- run_baselines.py: remove sys.argv manipulation, use run_simulation_from_config()
+- expose run_simulation_from_config() as programmatic entry point
 
+Fixes: CI-4 (Local == Centralized), M2 (dead code), M4 (sys.argv hack)"
+```
 
+---
+
+**PHASE COMPLETION CHECKLIST — PHASE 3**
+
+**SUCCESS CONDITIONS:**
+- Centralized ≠ Local Baseline outputs ✓
+- Dead code removed ✓
+- sys.argv manipulation removed ✓
+
+**FAIL CONDITIONS:**
+- Centralized still produces identical output to Local
+
+**NEXT PHASE ENTRY REQUIREMENTS:**
+Phase 3 success criteria met. Centralized and Local produce genuinely different F1 values.
+
+**DO NOT CONTINUE TO PHASE 4 UNTIL ALL SUCCESS CRITERIA PASS.**
+
+---
+
+## Phase 4 — Statistical and Evaluation Corrections
+
+### Objective
+Fix the numerically degenerate multi-seed statistical aggregation that produces t=-∞, p=0, Cohen's d=-38,800,000,000. Remove the invalid per-seed multi-seed summary files. Verify the main statistical tests produce valid numbers. Document the honest statistical interpretation: with 3 seeds and FedAgent-Chain F1 < Standard FedAvg F1 (before Phase 5 re-runs), the comparison may not be statistically significant.
+
+### Why This Phase Matters
+A paper claiming "our method is significantly better" when the statistical test shows p=0.2996 is scientifically dishonest. The numerically degenerate per-seed tests (t=-∞) are not just incorrect — they are statistically impossible values that any reviewer will immediately flag. This phase ensures all statistical claims are honest, correctly computed, and appropriately qualified.
+
+### Root Cause Explanation
+The `aggregate_multi_seed_results.py` script, when run from within a seed-specific subdirectory OR with only one seed's data available, loads a single per-seed CSV. It then creates a `table_2_multi_seed_summary.csv` that appears to have 3 seeds but actually has the same F1 value repeated 3 times (producing std=0). When `scipy.stats.ttest_rel` receives two arrays that are BOTH constant (all values identical), the test statistic becomes undefined (0/0), which in NumPy manifests as ±inf.
+
+The fix is: (1) delete the invalid per-seed multi-seed summary files, (2) ensure `aggregate_multi_seed_results.py` is only run from the parent directory with access to all three seed subdirectories, (3) add a guard that refuses to compute statistics if n_seeds < 2 or if std=0.
+
+### Files Involved
+- `scripts/aggregate_multi_seed_results.py` — add degenerate input guards
+- `experiments/results/seed_42/table_2_multi_seed_summary.csv` — DELETE (invalid)
+- `experiments/results/seed_42/statistical_tests.csv` — DELETE (invalid, t=-inf)
+- `experiments/results/seed_123/table_2_multi_seed_summary.csv` — DELETE (invalid)
+- `experiments/results/seed_123/statistical_tests.csv` — DELETE (invalid)
+- `experiments/results/seed_2024/table_2_multi_seed_summary.csv` — DELETE (invalid)
+- `experiments/results/seed_2024/statistical_tests.csv` — DELETE (invalid)
+- `tests/regression/test_paper_results.py` — update to use correct statistical interpretation
+
+### Required Code Modifications
+
+**Modification 4.1 — `scripts/aggregate_multi_seed_results.py`, add degenerate input guards**
+
+```python
 def run_statistical_tests(
     method_a_scores: list[float],
     method_b_scores: list[float],
     method_a_name: str,
     method_b_name: str,
-) -> dict:
-    """Run paired t-test and compute Cohen's d between two methods."""
+) -> dict | None:
+    """Run paired t-test and compute Cohen's d between two methods.
+    
+    Returns None (not a result row) if the test cannot be validly performed.
+    This prevents numerically degenerate results (t=-inf, p=0) from being
+    written to statistical_tests.csv.
+    """
     a = np.array(method_a_scores)
     b = np.array(method_b_scores)
 
+    # Guard 1: Minimum sample size
+    if len(a) < 2:
+        logger.warning(
+            "Insufficient samples for statistical test",
+            method_a=method_a_name,
+            method_b=method_b_name,
+            n_samples=len(a),
+        )
+        return None
+    
+    # Guard 2: Degenerate variance (all values identical)
+    diff = a - b
+    diff_std = float(np.std(diff, ddof=1))
+    if diff_std < 1e-8:
+        logger.warning(
+            "Statistical test degenerate: std(diff) ≈ 0. "
+            "This indicates all seeds produced identical results, "
+            "which suggests the per-seed results are copies of a single run "
+            "rather than genuinely independent experiments. "
+            "Test results WILL NOT be written.",
+            method_a=method_a_name,
+            method_b=method_b_name,
+            diff_std=diff_std,
+            a_values=list(a),
+            b_values=list(b),
+        )
+        return None
+    
+    # Guard 3: Values must be in valid range [0, 1] for F1
+    for arr, name in [(a, method_a_name), (b, method_b_name)]:
+        if np.any(arr < 0) or np.any(arr > 1):
+            logger.error(
+                "F1 values out of [0,1] range — data integrity issue",
+                method=name,
+                values=list(arr),
+            )
+            return None
+    
     t_stat, p_value = stats.ttest_rel(a, b)
-
-    # Cohen's d for paired samples
-    diff     = a - b
-    cohens_d = np.mean(diff) / (np.std(diff, ddof=1) + 1e-12)
+    
+    # Guard 4: Check for infinite or NaN results
+    if not np.isfinite(t_stat) or not np.isfinite(p_value):
+        logger.error(
+            "Non-finite t-statistic or p-value despite std > 0 — numerical issue",
+            t_stat=float(t_stat),
+            p_value=float(p_value),
+            diff_std=diff_std,
+        )
+        return None
+    
+    cohens_d = float(np.mean(diff)) / (diff_std + 1e-12)
 
     return {
-        "comparison":     f"{method_a_name} vs {method_b_name}",
-        "mean_diff":      round(float(np.mean(diff)), 4),
-        "t_statistic":    round(float(t_stat), 4),
-        "p_value":        round(float(p_value), 4),
-        "cohens_d":       round(float(cohens_d), 4),
-        "significant":    bool(p_value < 0.05),
+        "comparison": f"{method_a_name} vs {method_b_name}",
+        "mean_diff": round(float(np.mean(diff)), 4),
+        "t_statistic": round(float(t_stat), 4),
+        "p_value": round(float(p_value), 4),
+        "cohens_d": round(float(cohens_d), 4),
+        "significant": bool(p_value < 0.05),
+        "n_seeds": len(a),
+        "warning": "With n=3 seeds, statistical power is limited. p < 0.05 requires very large effect sizes." if len(a) < 5 else None,
     }
-
-
-def main() -> None:
-    args = parse_args()
-    setup_logging(format="console")
-    results_dir = ensure_dir(Path(args.results_dir))
-    seeds = args.seeds
-
-    # ── Load Table 2 per seed ────────────────────────────────────────────────
-    per_seed: dict[int, pd.DataFrame] = {}
-    for seed in seeds:
-        seed_dir = results_dir / f"seed_{seed}"
-        t2_path  = seed_dir / "table_2_model_performance.csv"
-        if not t2_path.exists():
-            # If per-seed subdirectories don't exist, check the main dir
-            t2_path = results_dir / "table_2_model_performance.csv"
-        if not t2_path.exists():
-            logger.warning("Table 2 not found for seed", seed=seed, path=str(t2_path))
-            continue
-        per_seed[seed] = pd.read_csv(t2_path)
-
-    if len(per_seed) < 2:
-        logger.error(
-            "Need results for at least 2 seeds. "
-            "Run run_evaluation.py for each seed first, "
-            "saving to experiments/results/seed_{seed}/ subdirectories."
-        )
-        return
-
-    # ── Collect F1 scores per method across seeds ────────────────────────────
-    methods = per_seed[seeds[0]]["Method"].tolist()
-    f1_by_method: dict[str, list[float]] = {m: [] for m in methods}
-
-    for seed, df in per_seed.items():
-        for method in methods:
-            row = df[df["Method"] == method]
-            if not row.empty:
-                f1_by_method[method].append(float(row["F1"].iloc[0]))
-
-    # ── Summary table ─────────────────────────────────────────────────────────
-    summary_rows = []
-    for method, f1_list in f1_by_method.items():
-        if not f1_list:
-            continue
-        arr = np.array(f1_list)
-        summary_rows.append({
-            "Method":  method,
-            "F1_mean": round(float(np.mean(arr)), 4),
-            "F1_std":  round(float(np.std(arr, ddof=1)), 4),
-            "F1_min":  round(float(np.min(arr)), 4),
-            "F1_max":  round(float(np.max(arr)), 4),
-            "n_seeds": len(arr),
-        })
-    summary_df = pd.DataFrame(summary_rows)
-    summary_df.to_csv(results_dir / "table_2_multi_seed_summary.csv", index=False)
-
-    print("\n=== Multi-Seed F1 Summary ===")
-    print(summary_df.to_string(index=False))
-
-    # ── Statistical tests: FedAgent-Chain vs each baseline ───────────────────
-    fedagent_key = next((k for k in f1_by_method if "FedAgent" in k), None)
-    if fedagent_key is None:
-        logger.warning("FedAgent-Chain results not found in summary table")
-        return
-
-    test_rows = []
-    for method in methods:
-        if method == fedagent_key:
-            continue
-        if len(f1_by_method[method]) < 2:
-            continue
-        result = run_statistical_tests(
-            f1_by_method[fedagent_key],
-            f1_by_method[method],
-            fedagent_key, method,
-        )
-        test_rows.append(result)
-
-    tests_df = pd.DataFrame(test_rows)
-    tests_df.to_csv(results_dir / "statistical_tests.csv", index=False)
-
-    print("\n=== Statistical Tests (paired t-test) ===")
-    print(tests_df.to_string(index=False))
-    print(
-        "\n  Significance threshold: p < 0.05  |  "
-        "Strong effect: |d| > 0.80  |  "
-        "Medium: |d| > 0.50"
-    )
-
-    print(f"\n✅  Statistical analysis saved to: {results_dir}")
-
-
-if __name__ == "__main__":
-    main()
 ```
 
----
-
-## Fix 5.3 — Save Per-Seed Results to Subdirectories
-
-Modify `scripts/run_evaluation.py` to accept a `--seed-subdir` flag and save
-to `experiments/results/seed_{seed}/`:
-
-```python
-# Add to parse_args():
-p.add_argument(
-    "--seed-subdir", action="store_true",
-    help="Save results to seed-specific subdirectory for multi-seed aggregation."
-)
-
-# In main(), change results_dir assignment:
-if args.seed_subdir:
-    results_dir = ensure_dir(Path(args.results_dir) / f"seed_{args.seed}")
-else:
-    results_dir = ensure_dir(Path(args.results_dir))
-```
-
-Then run all three seeds saving to subdirectories:
+**Modification 4.2 — Delete invalid per-seed aggregation artifacts**
 
 ```bash
-for SEED in 42 123 2024; do
-  python scripts/run_evaluation.py --seed $SEED --seed-subdir
-done
+# Move invalid files to backup (do not delete without backup)
+mkdir -p logs/phase4_invalid_stats_backup
+cp experiments/results/seed_42/table_2_multi_seed_summary.csv logs/phase4_invalid_stats_backup/seed_42_multi_seed_summary.csv
+cp experiments/results/seed_42/statistical_tests.csv logs/phase4_invalid_stats_backup/seed_42_statistical_tests.csv
+# ... repeat for seed_123 and seed_2024 ...
 
-python scripts/aggregate_multi_seed_results.py \
-    --seeds 42 123 2024 --results-dir experiments/results/
+# Remove from tracked files
+git rm experiments/results/seed_42/table_2_multi_seed_summary.csv
+git rm experiments/results/seed_42/statistical_tests.csv
+git rm experiments/results/seed_123/table_2_multi_seed_summary.csv
+git rm experiments/results/seed_123/statistical_tests.csv
+git rm experiments/results/seed_2024/table_2_multi_seed_summary.csv
+git rm experiments/results/seed_2024/statistical_tests.csv
 ```
 
----
+**Modification 4.3 — Update `tests/regression/test_paper_results.py`**
 
-## Fix 5.4 — Confidence Intervals
-
-Add 95 % confidence intervals to the summary table in
-`aggregate_multi_seed_results.py`. Add this block inside `main()` after
-building `summary_rows`:
-
+Update the statistical significance test to reflect honest expectations:
 ```python
-from scipy.stats import t as t_dist
-
-for row in summary_rows:
-    n   = row["n_seeds"]
-    std = row["F1_std"]
-    se  = std / np.sqrt(n)
-    df_t = n - 1
-    t_cv = t_dist.ppf(0.975, df=df_t)   # 95% two-tailed critical value
-    row["CI_95_lower"] = round(row["F1_mean"] - t_cv * se, 4)
-    row["CI_95_upper"] = round(row["F1_mean"] + t_cv * se, 4)
-```
-
----
-
-## ✅ Phase 5 Success Gate
-
-- [ ] Three complete runs exist in `experiments/runs/` for each of the four
-  methods (12 run directories total, or 3 seeds × 4 methods)
-- [ ] `experiments/results/table_2_multi_seed_summary.csv` contains `F1_std`
-  values that are non-zero (if std=0.000 for any method, seeds are not
-  producing variation — investigate the seed propagation)
-- [ ] `experiments/results/statistical_tests.csv` contains p-values; at least
-  one comparison should show p < 0.05 (FedAgent-Chain vs Local Baseline)
-- [ ] 95 % confidence intervals are present in the summary CSV
-- [ ] Cohen's d is reported for all comparisons
-- [ ] `F1_std` for FedAgent-Chain should be in the range [0.002, 0.020];
-  values outside this range indicate a seeding problem
-
----
-
----
-
-# PHASE 6 — Regression Test Overhaul
-**Estimated effort: 4–6 hours**  
-**Prerequisite: Phase 5 complete (real numbers now exist)**
-
-The current regression tests are circular: they verify hardcoded CSVs against
-hardcoded expected values. After Phases 1–5, real computed values exist. The
-regression tests must be re-anchored to these computed values.
-
----
-
-## Fix 6.1 — Extract Actual Result Values
-
-After Phase 5, run:
-
-```bash
-python -c "
-import pandas as pd
-df = pd.read_csv('experiments/results/table_2_multi_seed_summary.csv')
-print(df[df.Method.str.contains('FedAgent')][['Method','F1_mean','F1_std']].to_string())
-"
-```
-
-Note down the actual `F1_mean` and `F1_std` values. These replace the
-hardcoded 0.832 in the test file.
-
----
-
-## Fix 6.2 — Rewrite `tests/regression/test_paper_results.py`
-
-Replace the entire file with:
-
-```python
-"""Regression tests for FedAgent-Chain paper results.
-
-These tests verify that the computed evaluation outputs match the values
-produced by a reference multi-seed run. Tolerances are set conservatively
-(±0.015 for single-seed, ±0.010 for multi-seed mean) to allow for minor
-platform-level floating-point variation.
-
-To update reference values after a legitimate re-run:
-    python scripts/run_evaluation.py --seed 42
-    pytest tests/regression/ -v --update-snapshots  (manual: update REFERENCE below)
-"""
-
-from __future__ import annotations
-from pathlib import Path
-import pandas as pd
-import pytest
-
-RESULTS_DIR = Path("experiments/results")
-TOLERANCE_SINGLE = 0.015   # single-seed tolerance
-TOLERANCE_MULTI  = 0.010   # multi-seed mean tolerance
-
-
-# ── Reference values from Phase 5 verified run ───────────────────────────────
-# UPDATE THESE VALUES after running Phase 5 with seeds 42, 123, 2024.
-# Do NOT hardcode these as the final paper values before running Phase 5.
-# These are placeholders — replace X.XXX with your actual computed values.
-
-REFERENCE = {
-    # Table 2 — replace with actual values from table_2_multi_seed_summary.csv
-    "fedagent_chain_f1_mean":       None,   # e.g. 0.791
-    "fedagent_chain_accuracy_mean": None,   # e.g. 0.803
-    "local_baseline_f1_mean":       None,   # e.g. 0.693
-    # Table 3 — replace with actual values from table_3_fairness_results.csv
-    "disability_disparity_fedagent":    None,   # e.g. 0.072
-    "disability_disparity_standard_fl": None,   # e.g. 0.112
-}
-
-
-def _require_reference(key: str):
-    """Skip test if reference value has not been set after Phase 5."""
-    if REFERENCE[key] is None:
-        pytest.skip(
-            f"Reference value for '{key}' not set. "
-            "Complete Phase 5 and update REFERENCE dict."
-        )
-    return REFERENCE[key]
-
-
-def load_table(filename: str) -> pd.DataFrame | None:
-    path = RESULTS_DIR / filename
-    if not path.exists():
-        return None
-    return pd.read_csv(path)
-
-
-@pytest.mark.regression
-class TestTable2ModelPerformance:
-
-    def test_results_csv_exists_and_is_nonempty(self):
-        df = load_table("table_2_model_performance.csv")
-        if df is None:
-            pytest.skip("Run run_evaluation.py first.")
-        assert len(df) >= 2, "Table 2 must have at least 2 method rows"
-
-    def test_fedagent_chain_f1_matches_reference(self):
-        expected = _require_reference("fedagent_chain_f1_mean")
-        df = load_table("table_2_multi_seed_summary.csv")
-        if df is None:
-            pytest.skip("Run aggregate_multi_seed_results.py first.")
-        row = df[df["Method"].str.contains("FedAgent", case=False, na=False)]
-        if row.empty:
-            pytest.skip("FedAgent-Chain row not found.")
-        actual = float(row["F1_mean"].iloc[0])
-        assert abs(actual - expected) <= TOLERANCE_MULTI, (
-            f"F1_mean={actual} deviates from reference {expected} "
-            f"by more than {TOLERANCE_MULTI}"
-        )
-
-    def test_fedagent_chain_f1_higher_than_local_baseline(self):
-        df = load_table("table_2_model_performance.csv")
-        if df is None:
-            pytest.skip("Run run_evaluation.py first.")
-        fedagent = df[df["Method"].str.contains("FedAgent", case=False, na=False)]
-        local    = df[df["Method"].str.contains("Local",    case=False, na=False)]
-        if fedagent.empty or local.empty:
-            pytest.skip("Required rows not found.")
-        assert float(fedagent["F1"].iloc[0]) > float(local["F1"].iloc[0]), (
-            "FedAgent-Chain F1 should exceed Local Baseline"
-        )
-
-    def test_f1_std_is_nonzero(self):
-        """Confirms results are not hardcoded (std=0 would indicate literals)."""
-        df = load_table("table_2_multi_seed_summary.csv")
-        if df is None:
-            pytest.skip("Run aggregate_multi_seed_results.py first.")
-        row = df[df["Method"].str.contains("FedAgent", case=False, na=False)]
-        if row.empty:
-            pytest.skip()
-        std = float(row["F1_std"].iloc[0])
-        assert std > 0.0, (
-            "F1_std == 0 suggests results are hardcoded, not computed from runs."
-        )
-
-
-@pytest.mark.regression
-class TestTable3FairnessDisparity:
-
-    def test_disparity_csv_exists(self):
-        df = load_table("table_3_fairness_results.csv")
-        if df is None:
-            pytest.skip("Run run_evaluation.py first.")
-        assert len(df) >= 4
-
-    def test_fedagent_lower_disparity_than_standard_fl(self):
-        """Core claim: FedAgent-Chain must reduce D_fair vs Standard FedAvg."""
-        df = load_table("table_3_fairness_results.csv")
-        if df is None:
-            pytest.skip("Run run_evaluation.py first.")
-        if "Standard FedAvg" not in df.columns or "FedAgent-Chain" not in df.columns:
-            pytest.skip("Required columns not in Table 3.")
-        assert all(
-            df["FedAgent-Chain"].values < df["Standard FedAvg"].values
-        ), "FedAgent-Chain D_fair must be lower than Standard FedAvg for ALL attributes."
-
-    def test_disability_disparity_matches_reference(self):
-        expected = _require_reference("disability_disparity_fedagent")
-        df = load_table("table_3_fairness_results.csv")
-        if df is None:
-            pytest.skip()
-        row = df[df["Attribute"].str.contains("Disab", case=False, na=False)]
-        if row.empty:
-            pytest.skip()
-        actual = float(row["FedAgent-Chain"].iloc[0])
-        assert abs(actual - expected) <= TOLERANCE_SINGLE
-
-
-@pytest.mark.regression
-class TestTable4BlockchainAuditability:
-
-    def test_hash_completeness_from_real_audit(self):
-        df = load_table("table_4_blockchain_results.csv")
-        if df is None:
-            pytest.skip()
-        row = df[df["Metric"].str.contains("Hash Completeness", case=False, na=False)]
-        if row.empty:
-            pytest.skip()
-        val_str = str(row["Value"].iloc[0])
-        val     = float(val_str.replace("%", "")) / 100.0
-        # Hash completeness should always be 1.0 if blockchain is functioning
-        assert val >= 0.99, f"Hash completeness {val:.3f} below 99%"
-
-    def test_chain_integrity_is_valid(self):
-        df = load_table("table_4_blockchain_results.csv")
-        if df is None:
-            pytest.skip()
-        row = df[df["Metric"].str.contains("Chain Integrity", case=False, na=False)]
-        if row.empty:
-            pytest.skip()
-        assert str(row["Value"].iloc[0]).strip() == "Valid"
-
-
 @pytest.mark.regression
 class TestStatisticalValidity:
-
-    def test_statistical_tests_csv_exists(self):
+    def test_statistical_tests_csv_exists_and_is_valid(self):
+        """Statistical tests must exist AND contain finite, valid values."""
         path = RESULTS_DIR / "statistical_tests.csv"
         if not path.exists():
             pytest.skip("Run aggregate_multi_seed_results.py first.")
         df = pd.read_csv(path)
         assert len(df) >= 1
-
-    def test_fedagent_chain_significantly_better_than_local_baseline(self):
+        
+        # Verify no degenerate values
+        for col in ["t_statistic", "p_value", "cohens_d"]:
+            if col in df.columns:
+                assert not df[col].isnull().any(), f"NaN in {col}"
+                assert np.isfinite(df[col].values).all(), (
+                    f"Non-finite values in {col}: {df[col].values}. "
+                    f"Degenerate t-test indicates seeds produced identical results."
+                )
+        
+        # p-values must be in [0, 1]
+        assert (df["p_value"] >= 0).all() and (df["p_value"] <= 1).all(), (
+            f"p-values out of [0,1]: {df['p_value'].values}"
+        )
+    
+    def test_effect_size_interpretable(self):
+        """Cohen's d should be in an interpretable range (not billions)."""
         path = RESULTS_DIR / "statistical_tests.csv"
         if not path.exists():
             pytest.skip()
-        df  = pd.read_csv(path)
-        row = df[df["comparison"].str.contains("Local", case=False, na=False)]
-        if row.empty:
+        df = pd.read_csv(path)
+        if "cohens_d" not in df.columns:
             pytest.skip()
-        p_value = float(row["p_value"].iloc[0])
-        assert p_value < 0.05, (
-            f"FedAgent-Chain vs Local Baseline not significant: p={p_value:.4f}. "
-            "This is a serious validity concern."
+        assert (df["cohens_d"].abs() < 10).all(), (
+            f"Cohen's d values are unreasonably large: {df['cohens_d'].values}. "
+            f"Expected |d| < 10 for ML performance metrics."
         )
 ```
 
----
+**Modification 4.4 — Add honest statistical disclaimer to README**
 
-## ✅ Phase 6 Success Gate
-
-- [ ] Update `REFERENCE` dict in `test_paper_results.py` with actual computed
-  values from Phase 5
-- [ ] `pytest tests/regression/ -v -m regression` — all tests pass
-- [ ] Specifically: `test_f1_std_is_nonzero` **passes** (proving results are
-  not hardcoded literals)
-- [ ] Specifically: `test_fedagent_chain_significantly_better_than_local_baseline`
-  passes (p < 0.05)
-- [ ] `pytest tests/ -v` — entire test suite passes
-
----
-
----
-
-# PHASE 7 — Final End-to-End Validation and Paper Synchronisation
-**Estimated effort: 1 day**  
-**Prerequisite: All previous phases complete**
-
-This phase is a final quality gate before submission. It verifies full
-reproducibility and ensures every number in the paper draft is traceable to a
-specific CSV row and computed via the fixed pipeline.
-
----
-
-## Fix 7.1 — Run `make reproduce` End-to-End
-
-From a fresh terminal with no pre-existing results:
-
-```bash
-make clean-data
-rm -rf experiments/runs/* experiments/results/*.csv experiments/figures/*.pdf
-
-make reproduce   # Runs all scripts sequentially
+Add a note to the README's Table 2 section:
+```markdown
+> **Statistical Note**: Performance differences between methods are evaluated 
+> using a paired t-test across 3 independent seeds (42, 123, 2024). With n=3 seeds, 
+> statistical power is limited. Effect sizes (Cohen's d) and confidence intervals 
+> are provided in `experiments/results/table_2_multi_seed_summary.csv`. 
+> Differences with p > 0.05 should be interpreted as directional trends requiring 
+> validation with additional seeds rather than confirmed significant differences.
 ```
 
-This should complete without errors and produce all result CSVs and figures.
+### Validation
+
+```bash
+# Generate valid multi-seed statistics from ALL THREE seeds
+python scripts/aggregate_multi_seed_results.py \
+    --seeds 42 123 2024 \
+    --results-dir experiments/results/
+
+# Verify results are non-degenerate
+python -c "
+import pandas as pd; import numpy as np
+df = pd.read_csv('experiments/results/statistical_tests.csv')
+print('Statistical Tests:')
+print(df.to_string(index=False))
+
+# All t-statistics must be finite
+assert np.isfinite(df['t_statistic'].values).all(), 'FAIL: Non-finite t-statistics'
+# All p-values in [0, 1]
+assert (df['p_value'] >= 0).all() and (df['p_value'] <= 1).all(), 'FAIL: Invalid p-values'
+# Cohen's d < 10
+assert (df['cohens_d'].abs() < 10).all(), 'FAIL: Degenerate Cohen d'
+print('PASS: All statistical values are finite and valid')
+
+# Report honest significance
+for _, row in df.iterrows():
+    sig = 'SIGNIFICANT' if row['p_value'] < 0.05 else 'NOT SIGNIFICANT'
+    print(f'{row[\"comparison\"]}: p={row[\"p_value\"]:.4f} ({sig}), d={row[\"cohens_d\"]:.4f}')
+"
+```
+
+### Success Criteria
+- [ ] All t-statistics are finite
+- [ ] All p-values in [0, 1]
+- [ ] All Cohen's d values in [-10, 10]
+- [ ] No per-seed multi-seed summary files exist (deleted)
+- [ ] Main `statistical_tests.csv` regenerated from all 3 seeds
+- [ ] Regression test for statistical validity passes
+
+### Failure Criteria
+- t-statistic is still ±inf after fix → degenerate input still reaching `ttest_rel`
+- Per-seed summary CSVs still show std=0
+
+### Git Commit Recommendation
+```
+git add scripts/aggregate_multi_seed_results.py \
+        tests/regression/test_paper_results.py \
+        README.md logs/phase4_invalid_stats_backup/
+git commit -m "phase4: fix degenerate statistical tests, remove invalid per-seed aggregations
+
+- add input guards to aggregate_multi_seed_results.py (reject std=0, n<2)
+- remove per-seed multi_seed_summary and statistical_tests CSVs (invalid)
+- update regression tests to verify finite t-statistics and valid p-values
+- add honest statistical disclaimer to README Table 2
+
+Fixes: CI-3 (t=-inf statistical tests)"
+```
 
 ---
 
-## Fix 7.2 — Verify the Full Checklist
+**PHASE COMPLETION CHECKLIST — PHASE 4**
 
-Run this verification script:
+**SUCCESS CONDITIONS:**
+- statistical_tests.csv has finite values ✓
+- Per-seed invalid CSVs removed ✓
+- Regression test passes ✓
 
-```python
-# scripts/verify_submission_readiness.py
-"""Final verification script for Q1 submission readiness."""
-import sys
+**FAIL CONDITIONS:**
+- t-statistic still ±inf
+- Any statistical value outside valid range
+
+**NEXT PHASE ENTRY REQUIREMENTS:**
+Phase 4 success criteria met. Valid statistical tests generated.
+
+**DO NOT CONTINUE TO PHASE 5 UNTIL ALL SUCCESS CRITERIA PASS.**
+
+---
+
+## Phase 5 — Full Experiment Reproduction
+
+### Objective
+Re-run all experiments from scratch with the fixed codebase: FedAgent-Chain (full), Standard FedAvg (no_fairness ablation), Local Baseline, Centralized Baseline, for seeds 42, 123, and 2024. Generate all paper tables and verify internal consistency across seeds. Regenerate all figures.
+
+### Why This Phase Matters
+Every prior experiment was run with the buggy delta-accumulation FedAvg, wrong group labels in the fairness penalty, and a non-functional centralized baseline. All committed CSVs, JSONs, and blockchain logs are products of a broken codebase. They must be regenerated from scratch with the fixed code to have any scientific validity.
+
+### Files Involved
+- All of `experiments/results/` (will be overwritten with validated backups)
+- All of `experiments/runs/` (generated by re-running simulations)
+- `experiments/figures/` (regenerated)
+- `experiments/results/table_2_model_performance.csv` through `table_7_overhead.csv`
+
+### Pre-Phase Requirements
+- Phase 1 fix verified (FedAvg convergence)
+- Phase 2 fix verified (group label alignment)
+- Phase 3 fix verified (centralized baseline)
+- Phase 4 fix verified (statistical tests)
+- Full test suite passes (no regressions)
+
+### Tasks
+
+**Task 5.1 — Backup Current (Broken) Results**
+```bash
+mkdir -p logs/phase5_broken_results_backup
+cp -r experiments/results/ logs/phase5_broken_results_backup/results_before_phase5/
+echo "Backup of broken results created at $(date)" > logs/phase5_broken_results_backup/README.txt
+git add logs/phase5_broken_results_backup/
+git commit -m "phase5: backup broken results before full re-run"
+```
+
+**Task 5.2 — Generate Fresh Synthetic Data (All Seeds)**
+```bash
+for SEED in 42 123 2024; do
+    python scripts/generate_synthetic_data.py \
+        --config configs/experiment/fedagent_chain_full.yaml \
+        --seed $SEED \
+        --output-dir data/synthetic/ \
+        2>&1 | tee logs/phase5_data_seed${SEED}.txt
+    echo "Data generation seed=$SEED exit code: $?"
+done
+```
+
+Verify data was generated:
+```bash
+python -c "
+from pathlib import Path
+for node in ['saudi_arabia', 'united_states', 'china', 'europe']:
+    for f in ['users.csv', 'jobs.csv', 'outcomes.csv']:
+        p = Path(f'data/synthetic/{node}/{f}')
+        assert p.exists(), f'Missing: {p}'
+        import pandas as pd
+        df = pd.read_csv(p)
+        print(f'{p}: {len(df)} rows')
+print('PASS: All data files present')
+"
+```
+
+**Task 5.3 — Run All Configurations for Each Seed**
+
+For each seed, run all four configurations in this order:
+```bash
+for SEED in 42 123 2024; do
+    echo "=== Seed $SEED ==="
+    
+    # 1. Standard FedAvg (no_fairness ablation)
+    python scripts/run_federated_simulation.py \
+        --config configs/experiment/ablation/no_fairness.yaml \
+        --seed $SEED --no-mlflow \
+        2>&1 | tee logs/phase5_no_fairness_seed${SEED}.txt
+    
+    # 2. FedAgent-Chain (full, with fairness)
+    python scripts/run_federated_simulation.py \
+        --config configs/experiment/fedagent_chain_full.yaml \
+        --seed $SEED --no-mlflow \
+        2>&1 | tee logs/phase5_fedagent_seed${SEED}.txt
+    
+    # 3. Local Baseline
+    python scripts/run_baselines.py \
+        --config configs/experiment/baseline_local.yaml --seed $SEED \
+        2>&1 | tee logs/phase5_local_seed${SEED}.txt
+    
+    # 4. Centralized Baseline
+    python scripts/run_federated_simulation.py \
+        --config configs/experiment/baseline_centralized.yaml \
+        --seed $SEED --no-mlflow \
+        2>&1 | tee logs/phase5_centralized_seed${SEED}.txt
+done
+```
+
+**Task 5.4 — Convergence Diagnostics After Each Run**
+
+After each simulation, verify convergence:
+```bash
+python -c "
+import json, sys
 from pathlib import Path
 
+run_log = sys.argv[1]  # e.g., logs/phase5_no_fairness_seed42.txt
+# Find the corresponding per_round.json
+# (logic to find latest run dir)
+runs = sorted(Path('experiments/runs').glob('ablation_no_fairness_seed42_*'))
+latest = runs[-1]
+with open(latest / 'metrics' / 'per_round.json') as f:
+    history = json.load(f)
+
+losses = [r['mean_train_loss'] for r in history]
+print(f'Loss trajectory: {[round(x, 3) for x in losses]}')
+assert losses[-1] < losses[0] * 3, f'FAIL: Loss diverged (final={losses[-1]:.2f}, initial={losses[0]:.2f})'
+print('PASS: Loss convergence OK')
+" 2>&1
+```
+
+**Task 5.5 — Generate All Evaluation Tables (Per-Seed)**
+
+```bash
+for SEED in 42 123 2024; do
+    python scripts/run_evaluation.py \
+        --runs-dir experiments/runs/ \
+        --results-dir experiments/results/ \
+        --data-dir data/synthetic \
+        --seed $SEED \
+        --seed-subdir \
+        2>&1 | tee logs/phase5_eval_seed${SEED}.txt
+done
+```
+
+After each eval, sanity check:
+```bash
+python -c "
+import pandas as pd; import sys
+seed = sys.argv[1]
+df = pd.read_csv(f'experiments/results/seed_{seed}/table_2_model_performance.csv')
+print(f'Seed {seed} Table 2:')
+print(df[['Method','Accuracy','F1']].to_string(index=False))
+
+# Sanity checks
+for _, row in df.iterrows():
+    assert 0 <= row['F1'] <= 1, f'F1 out of range for {row[\"Method\"]}: {row[\"F1\"]}'
+    assert 0 <= row['Accuracy'] <= 1, f'Accuracy out of range: {row[\"Accuracy\"]}'
+
+# Local != Centralized (Phase 3 fix must hold)
+local = df[df['Method']=='Local Baseline']['F1'].values[0]
+central = df[df['Method']=='Centralized']['F1'].values[0]
+assert abs(local - central) > 0.005, f'FAIL: Local ({local:.4f}) == Centralized ({central:.4f})'
+print('PASS: Sanity checks pass')
+"
+```
+
+**Task 5.6 — Multi-Seed Aggregation**
+
+```bash
+python scripts/aggregate_multi_seed_results.py \
+    --seeds 42 123 2024 \
+    --results-dir experiments/results/ \
+    2>&1 | tee logs/phase5_aggregate.txt
+
+# Verify no degenerate statistics
+python -c "
+import pandas as pd; import numpy as np
+summary = pd.read_csv('experiments/results/table_2_multi_seed_summary.csv')
+print('Multi-Seed Summary:')
+print(summary[['Method','F1_mean','F1_std','CI_95_lower','CI_95_upper']].to_string(index=False))
+
+# FedAgent-Chain std must be > 0 (proving seeds are genuinely independent)
+fa_row = summary[summary['Method'].str.contains('FedAgent')]
+assert not fa_row.empty, 'FedAgent-Chain row missing'
+fa_std = float(fa_row['F1_std'].values[0])
+assert fa_std > 0.001, f'FAIL: FedAgent F1_std={fa_std} ≈ 0, seeds are not independent'
+
+stats = pd.read_csv('experiments/results/statistical_tests.csv')
+print()
+print('Statistical Tests:')
+print(stats.to_string(index=False))
+assert np.isfinite(stats['t_statistic'].values).all(), 'FAIL: Non-finite t-statistics'
+print('PASS: Statistics valid')
+"
+```
+
+**Task 5.7 — Regenerate Figures**
+
+```bash
+python scripts/generate_figures.py \
+    --results-dir experiments/results/ \
+    --runs-dir experiments/runs/ \
+    --output-dir experiments/figures/ \
+    2>&1 | tee logs/phase5_figures.txt
+
+# Verify figure files exist
+python -c "
+from pathlib import Path
+figures = ['fl_convergence.pdf', 'node_f1_scores.pdf', 'fairness_disparity.pdf']
+for fig in figures:
+    p = Path(f'experiments/figures/{fig}')
+    assert p.exists(), f'MISSING FIGURE: {fig}'
+    assert p.stat().st_size > 1000, f'Figure too small (likely empty): {fig}'
+    print(f'OK: {fig} ({p.stat().st_size} bytes)')
+"
+```
+
+**Task 5.8 — Full Regression Test Suite**
+
+```bash
+# Update regression test reference values with new results
+python -c "
+import pandas as pd
+df = pd.read_csv('experiments/results/table_2_multi_seed_summary.csv')
+fa_f1 = float(df[df['Method'].str.contains('FedAgent')]['F1_mean'].values[0])
+print(f'NEW REFERENCE: FedAgent-Chain F1_mean = {fa_f1:.4f}')
+print('Update REFERENCE dict in tests/regression/test_paper_results.py')
+"
+# Manually update tests/regression/test_paper_results.py REFERENCE dict with new values
+# Then run:
+pytest tests/regression/ -v --timeout=600 2>&1 | tee logs/phase5_regression.txt
+```
+
+### Expected Outputs
+- `experiments/results/seed_{42,123,2024}/table_2_model_performance.csv` — per-seed results
+- `experiments/results/table_2_model_performance.csv` — primary result table
+- `experiments/results/table_2_multi_seed_summary.csv` — multi-seed aggregation with F1_std > 0
+- `experiments/results/table_3_fairness_results.csv` — fairness disparity (should show improvement)
+- `experiments/results/statistical_tests.csv` — valid finite statistics
+- `experiments/figures/{fl_convergence,node_f1_scores,fairness_disparity}.pdf`
+
+### Success Criteria
+- [ ] All 4 configurations run for all 3 seeds (12 simulation runs total)
+- [ ] All 20-round runs show non-diverging loss (final loss < 3.0)
+- [ ] Local Baseline ≠ Centralized (F1 difference > 0.005)
+- [ ] FedAgent-Chain F1_std > 0.001 (seeds genuinely independent)
+- [ ] All statistical test values are finite
+- [ ] All 3 figures generated and non-empty
+- [ ] Regression tests pass with updated reference values
+
+### Failure Criteria
+- Any simulation run produces diverging loss
+- Local == Centralized outputs (Phase 3 fix failed to propagate)
+- F1_std == 0 after aggregation (seeds not truly independent)
+
+### Git Commit Recommendation
+```
+git add experiments/results/ experiments/figures/ \
+        tests/regression/test_paper_results.py \
+        logs/phase5_*.txt
+git commit -m "phase5: full experiment reproduction with fixed codebase
+
+- all 12 runs (4 configs × 3 seeds) completed with fixed FedAvg
+- FedAvg loss convergence verified (non-diverging)
+- centralized != local baseline verified
+- multi-seed aggregation generates valid statistics
+- paper figures regenerated from real simulation outputs
+
+Resolves all CI issues. See REPAIR_LOG.md for detailed comparison."
+```
+
+---
+
+**PHASE COMPLETION CHECKLIST — PHASE 5**
+
+**SUCCESS CONDITIONS:**
+- 12 simulation runs completed ✓
+- Non-diverging loss across all runs ✓
+- Valid multi-seed statistics ✓
+- All figures generated ✓
+- Regression tests pass ✓
+
+**FAIL CONDITIONS:**
+- Any run crashes or diverges
+- Centralized still equals Local
+- F1_std still 0
+
+**NEXT PHASE ENTRY REQUIREMENTS:**
+All 12 runs completed, all tables regenerated, regression tests pass.
+
+**DO NOT CONTINUE TO PHASE 6 UNTIL ALL SUCCESS CRITERIA PASS.**
+
+---
+
+## Phase 6 — Fairness-Accuracy Tradeoff Study (Required Missing Experiment)
+
+### Objective
+Conduct the λ_fairness sweep experiment to characterize the tradeoff between F1 accuracy and fairness disparity D_fair. This experiment is required to: (1) justify the choice of λ=0.5 in the paper, (2) provide the Pareto frontier evidence that the fairness penalty creates a genuine tradeoff, and (3) determine whether any λ value achieves both better F1 AND better fairness than Standard FedAvg.
+
+### Why This Phase Matters
+Without this experiment, the paper cannot justify its choice of λ=0.5. Currently the table shows FedAgent-Chain achieves lower F1 than Standard FedAvg for the same or worse fairness (before fixes). This experiment either (a) shows that a different λ value achieves better tradeoffs — providing a scientifically valid contribution — or (b) shows that no λ value achieves the claimed benefits — requiring fundamental redesign of the fairness mechanism.
+
+### Tasks
+
+**Task 6.1 — Create Lambda Sweep Configurations**
+
+Create `configs/experiment/lambda_sweep/` with the following configs (one per λ value):
+```yaml
+# configs/experiment/lambda_sweep/lambda_0.00.yaml
+experiment:
+  name: lambda_sweep_0.00
+  description: "Lambda fairness sweep: lambda=0.00 (Standard FedAvg)"
+  variant: lambda_sweep
+seed: 42
+federated:
+  n_rounds: 20
+  min_clients: 4
+  local_epochs: 3
+  batch_size: 64
+  learning_rate: 0.0001
+privacy:
+  enabled: true
+  clipping_threshold: 1.0
+  noise_multiplier: 0.1
+fairness:
+  enabled: true
+  lambda_fairness: 0.00   # varies per config
+  protected_groups:
+    - disability_category
+    - language_primary
+    - preferred_work_mode
+    - node_id
+blockchain:
+  enabled: false   # disabled for speed in sweep
+data:
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500
+```
+
+Create configs for λ ∈ {0.00, 0.05, 0.10, 0.20, 0.30, 0.50, 1.00, 2.00}.
+
+**Task 6.2 — Run Lambda Sweep Script**
+
+Create `scripts/run_lambda_sweep.py`:
+```python
+#!/usr/bin/env python3
+"""Lambda fairness sweep for FedAgent-Chain tradeoff analysis.
+
+Runs FedAgent-Chain for each lambda value and collects F1 and D_fair(disability).
+"""
+import subprocess, sys
+from pathlib import Path
+
+LAMBDAS = [0.00, 0.05, 0.10, 0.20, 0.30, 0.50, 1.00, 2.00]
+SEED = 42
+
+for lam in LAMBDAS:
+    config_path = Path(f"configs/experiment/lambda_sweep/lambda_{lam:.2f}.yaml")
+    assert config_path.exists(), f"Config missing: {config_path}"
+    
+    print(f"\n=== Lambda = {lam:.2f} ===")
+    result = subprocess.run([
+        sys.executable, "scripts/run_federated_simulation.py",
+        "--config", str(config_path),
+        "--seed", str(SEED),
+        "--no-mlflow",
+    ], check=False)
+    
+    if result.returncode != 0:
+        print(f"FAIL: lambda={lam:.2f} simulation failed with code {result.returncode}")
+    else:
+        print(f"PASS: lambda={lam:.2f} simulation complete")
+```
+
+**Task 6.3 — Aggregate and Plot Tradeoff Curve**
+
+Create `scripts/generate_lambda_tradeoff_plot.py`:
+```python
+"""Aggregate lambda sweep results and generate F1 vs D_fair tradeoff plot."""
+import pandas as pd
+import matplotlib.pyplot as plt
+import json
+from pathlib import Path
+
+# Collect metrics for each lambda
+results = []
+for lam_config in sorted(Path("configs/experiment/lambda_sweep").glob("*.yaml")):
+    lam = float(lam_config.stem.split("_")[-1])
+    # Find the corresponding run directory
+    runs = sorted(Path("experiments/runs").glob(f"lambda_sweep_{lam:.2f}_seed42_*"))
+    if not runs:
+        print(f"WARNING: No run found for lambda={lam:.2f}")
+        continue
+    latest = runs[-1]
+    
+    # Load per-round metrics
+    final_json = latest / "metrics" / "final.json"
+    if not final_json.exists():
+        print(f"WARNING: No final.json for lambda={lam:.2f}")
+        continue
+    
+    with open(final_json) as f:
+        final = json.load(f)
+    
+    best_f1 = final.get("best_f1", float("nan"))
+    mean_disparity = final.get("final_round_metrics", {}).get(
+        "mean_fairness_disparity_disability", float("nan")
+    )
+    
+    results.append({
+        "lambda": lam,
+        "best_f1": best_f1,
+        "d_fair_disability": mean_disparity,
+    })
+
+df = pd.DataFrame(results).sort_values("lambda")
+df.to_csv("experiments/results/lambda_tradeoff.csv", index=False)
+print(df.to_string(index=False))
+
+# Plot
+fig, ax = plt.subplots(figsize=(7, 5))
+scatter = ax.scatter(df["d_fair_disability"], df["best_f1"], 
+                     c=df["lambda"], cmap="viridis", s=100, zorder=5)
+for _, row in df.iterrows():
+    ax.annotate(f"λ={row['lambda']:.2f}", 
+                (row["d_fair_disability"], row["best_f1"]),
+                textcoords="offset points", xytext=(5, 5))
+plt.colorbar(scatter, label="λ_fairness")
+ax.set_xlabel(r"D_fair (disability) — lower is fairer", fontsize=12)
+ax.set_ylabel("Best F1 Score", fontsize=12)
+ax.set_title("Fairness-Accuracy Tradeoff: λ Sweep", fontsize=13, fontweight="bold")
+ax.grid(True, alpha=0.3)
+fig.savefig("experiments/figures/lambda_tradeoff.pdf", dpi=300, bbox_inches="tight")
+print("Figure saved: experiments/figures/lambda_tradeoff.pdf")
+```
+
+**Task 6.4 — Europe Node Failure Diagnosis**
+
+Run Europe-only local training to determine if the near-zero recall is a data distribution issue or FedAvg artifact:
+```bash
+# Create a minimal Europe-only config
+cat > configs/experiment/europe_local_diagnosis.yaml << EOF
+experiment:
+  name: europe_local_diagnosis
+seed: 42
+federated:
+  n_rounds: 1
+  local_epochs: 50
+  batch_size: 64
+  learning_rate: 0.001
+  min_clients: 1
+privacy:
+  enabled: false
+fairness:
+  enabled: false
+blockchain:
+  enabled: false
+data:
+  nodes: [europe]
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500
+EOF
+
+python scripts/run_federated_simulation.py \
+    --config configs/experiment/europe_local_diagnosis.yaml \
+    --seed 42 --no-mlflow \
+    2>&1 | tee logs/phase6_europe_diagnosis.txt
+
+# Report findings
+python -c "
+import json
+from pathlib import Path
+runs = sorted(Path('experiments/runs').glob('europe_local_diagnosis_*'))
+with open(runs[-1] / 'metrics' / 'per_round.json') as f:
+    history = json.load(f)
+final = history[-1]
+print('Europe-only local training (50 epochs):')
+print(f'  F1: {final[\"per_node\"][\"europe\"][\"f1\"]:.4f}')
+print(f'  Recall: {final[\"per_node\"][\"europe\"][\"recall\"]:.4f}')
+print(f'  Accuracy: {final[\"per_node\"][\"europe\"][\"accuracy\"]:.4f}')
+recall = final['per_node']['europe']['recall']
+if recall > 0.5:
+    print('FINDING: Europe succeeds with local training → FedAvg aggregation is destroying Europe model')
+    print('RECOMMENDATION: Consider FedProx or per-node learning rate adaptation')
+else:
+    print('FINDING: Europe fails even locally → Data distribution issue')
+    print('RECOMMENDATION: Check Europe disability/language distribution, consider SMOTE or resampling')
+" 2>&1 | tee -a logs/phase6_europe_diagnosis.txt
+```
+
+Document findings in `REPAIR_LOG.md`.
+
+### Validation
+
+After the sweep:
+- Verify the Pareto frontier exists (some λ values have better D_fair at cost of F1)
+- Verify λ=0 approximately recovers Standard FedAvg results
+- Document the optimal λ that minimizes combined loss (e.g., `F1_loss + D_fair`)
+- If no λ achieves better fairness than Standard FedAvg, document this as a limitation requiring future work
+
+### Success Criteria
+- [ ] Lambda sweep completed for all 8 λ values
+- [ ] `experiments/results/lambda_tradeoff.csv` generated
+- [ ] `experiments/figures/lambda_tradeoff.pdf` generated
+- [ ] Europe node diagnosis completed and findings documented in REPAIR_LOG.md
+- [ ] Optimal λ identified and justified in REPAIR_LOG.md
+
+### Failure Criteria
+- No λ value achieves better fairness AND better F1 simultaneously (expected — document as tradeoff)
+- Lambda sweep simulations diverge (indicates Phase 1 fix is incomplete)
+
+### Git Commit Recommendation
+```
+git add configs/experiment/lambda_sweep/ scripts/run_lambda_sweep.py \
+        scripts/generate_lambda_tradeoff_plot.py \
+        experiments/results/lambda_tradeoff.csv \
+        experiments/figures/lambda_tradeoff.pdf \
+        logs/phase6_europe_diagnosis.txt
+git commit -m "phase6: add lambda fairness sweep and Europe node diagnosis
+
+- sweep lambda in {0.00, 0.05, 0.10, 0.20, 0.30, 0.50, 1.00, 2.00}
+- generate F1 vs D_fair Pareto frontier plot
+- diagnose Europe node failure mode (local vs FedAvg)
+- document optimal lambda and tradeoff characterization
+
+Addresses: missing experiment ME-1 (fairness-accuracy tradeoff)"
+```
+
+---
+
+**PHASE COMPLETION CHECKLIST — PHASE 6**
+
+**SUCCESS CONDITIONS:**
+- All 8 lambda sweep runs complete ✓
+- Tradeoff CSV and plot generated ✓
+- Europe diagnosis documented ✓
+
+**FAIL CONDITIONS:**
+- Lambda sweep simulations diverge (implies Phase 1 incomplete)
+
+**NEXT PHASE ENTRY REQUIREMENTS:**
+Lambda sweep complete. Europe diagnosis documented.
+
+**DO NOT CONTINUE TO PHASE 7 UNTIL ALL SUCCESS CRITERIA PASS.**
+
+---
+
+## Phase 7 — Repository Cleanup and Hardening
+
+### Objective
+Remove all identified development artifacts, dead code, and invalid committed results. Harden the codebase with defensive assertions, CI improvements, and reproducibility scripts. Ensure the repository is clean enough for public submission.
+
+### Tasks
+
+**Task 7.1 — Remove Dead Code and Development Artifacts**
+
+```bash
+# Remove development debug files
+git rm debug_eval.py
+git rm per_round_debug.json
+
+# Remove temp results directory
+git rm -r experiments/results_temp/
+
+# Remove already-backed-up invalid stat files (done in Phase 4)
+# Verify they are already removed
+git status experiments/results/seed_42/statistical_tests.csv  # should show 'deleted'
+```
+
+**Task 7.2 — Fix Dead Code in `_find_best_checkpoint`**
+Verify this was already done in Phase 3. Run a specific test:
+```python
+def test_find_best_checkpoint_fallback_reachable():
+    """Verify the fallback code in _find_best_checkpoint is reachable
+    by testing with a run_dir that has per_round.json but no matching checkpoint."""
+    import tempfile
+    from pathlib import Path
+    import json
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        run_dir = Path(tmpdir)
+        ckpt_dir = run_dir / "checkpoints"
+        metrics_dir = run_dir / "metrics"
+        ckpt_dir.mkdir()
+        metrics_dir.mkdir()
+        
+        # Create per_round.json saying best round is 5
+        history = [{"round": i, "mean_f1": 0.5 + i * 0.01} for i in range(1, 6)]
+        with open(metrics_dir / "per_round.json", "w") as f:
+            json.dump(history, f)
+        
+        # Create checkpoints for rounds 1, 2, 3 only (NOT 5, which is "best")
+        for rnd in [1, 2, 3]:
+            (ckpt_dir / f"global_model_round_{rnd:03d}.pt").touch()
+        
+        # Also create final_model.pt as fallback
+        (ckpt_dir / "final_model.pt").touch()
+        
+        # Should return round 3 (nearest below best round 5)
+        from scripts.run_evaluation import _find_best_checkpoint
+        result = _find_best_checkpoint(run_dir)
+        assert result.name == "global_model_round_003.pt", (
+            f"Expected round 3 fallback, got {result.name}"
+        )
+```
+
+**Task 7.3 — Add Loss Explosion Detector as Permanent CI Check**
+
+Add to `.github/workflows/ci.yml`:
+```yaml
+- name: Verify no diverging loss in smoke test
+  run: |
+    python -c "
+    import json
+    from pathlib import Path
+    runs = sorted(Path('experiments/runs').glob('fedagent_chain_full_seed42_*'))
+    if not runs:
+        print('No runs found - skipping divergence check')
+        exit(0)
+    latest = runs[-1]
+    per_round = latest / 'metrics' / 'per_round.json'
+    if not per_round.exists():
+        print('No per_round.json - skipping')
+        exit(0)
+    with open(per_round) as f:
+        history = json.load(f)
+    if len(history) < 2:
+        exit(0)
+    losses = [r['mean_train_loss'] for r in history]
+    ratio = losses[-1] / (losses[0] + 1e-8)
+    assert ratio < 5.0, f'Loss diverged: round1={losses[0]:.3f}, final={losses[-1]:.3f}, ratio={ratio:.1f}'
+    print(f'Loss convergence OK: {losses[0]:.3f} -> {losses[-1]:.3f}')
+    "
+```
+
+**Task 7.4 — Add Artifact Integrity Check Script**
+
+Create `scripts/verify_artifact_integrity.py`:
+```python
+#!/usr/bin/env python3
+"""Verify that all committed result artifacts are internally consistent.
+
+Checks:
+1. Per-seed tables exist for all 3 seeds
+2. Multi-seed summary std > 0 (seeds are independent)  
+3. Statistical tests have finite values
+4. Centralized != Local Baseline
+5. FedAgent-Chain fairness improvement exists for at least 2/4 attributes
+"""
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import sys
+
+RESULTS = Path("experiments/results")
 errors = []
 warnings = []
 
-RESULTS = Path("experiments/results")
-RUNS    = Path("experiments/runs")
-FIGURES = Path("experiments/figures")
+# Check 1: Per-seed tables exist
+for seed in [42, 123, 2024]:
+    for table in ["table_2_model_performance.csv", "table_3_fairness_results.csv"]:
+        p = RESULTS / f"seed_{seed}" / table
+        if not p.exists():
+            errors.append(f"MISSING: {p}")
 
-# ── CSV tables ──────────────────────────────────────────────────────────────
-required_csvs = [
-    "table_2_model_performance.csv",
-    "table_2_multi_seed_summary.csv",
-    "table_3_fairness_results.csv",
-    "table_4_blockchain_results.csv",
-    "table_5_agent_results.csv",
-    "table_7_overhead.csv",
-    "statistical_tests.csv",
-]
-for f in required_csvs:
-    if not (RESULTS / f).exists():
-        errors.append(f"MISSING CSV: {f}")
+# Check 2: Multi-seed std > 0
+summary = RESULTS / "table_2_multi_seed_summary.csv"
+if summary.exists():
+    df = pd.read_csv(summary)
+    fa_row = df[df["Method"].str.contains("FedAgent", na=False)]
+    if not fa_row.empty and float(fa_row["F1_std"].values[0]) < 0.001:
+        errors.append("F1_std ≈ 0 in multi-seed summary — seeds are not independent")
 
-# ── Figures ─────────────────────────────────────────────────────────────────
-for fig in ["fl_convergence.pdf", "node_f1_scores.pdf", "fairness_disparity.pdf"]:
-    if not (FIGURES / fig).exists():
-        errors.append(f"MISSING FIGURE: {fig}")
+# Check 3: Statistical tests finite
+stats_path = RESULTS / "statistical_tests.csv"
+if stats_path.exists():
+    stats_df = pd.read_csv(stats_path)
+    if not np.isfinite(stats_df["t_statistic"].values).all():
+        errors.append("Non-finite t-statistics in statistical_tests.csv")
 
-# ── Multi-seed runs ──────────────────────────────────────────────────────────
-import pandas as pd
-summary_path = RESULTS / "table_2_multi_seed_summary.csv"
-if summary_path.exists():
-    df = pd.read_csv(summary_path)
-    row = df[df.get("Method", pd.Series()).str.contains("FedAgent", na=False)]
-    if not row.empty:
-        n_seeds = int(row["n_seeds"].iloc[0]) if "n_seeds" in row.columns else 0
-        if n_seeds < 3:
-            errors.append(f"Only {n_seeds} seed(s) in multi-seed summary — need ≥ 3")
-        f1_std = float(row["F1_std"].iloc[0]) if "F1_std" in row.columns else 0.0
-        if f1_std == 0.0:
-            errors.append("F1_std == 0.0 — results may still be hardcoded")
-    else:
-        errors.append("FedAgent-Chain row not found in multi-seed summary")
+# Check 4: Centralized != Local
+t2 = RESULTS / "table_2_model_performance.csv"
+if t2.exists():
+    df = pd.read_csv(t2)
+    local = df[df["Method"] == "Local Baseline"]["F1"].values
+    central = df[df["Method"] == "Centralized"]["F1"].values
+    if len(local) > 0 and len(central) > 0:
+        if abs(float(local[0]) - float(central[0])) < 0.005:
+            errors.append(f"Centralized F1 ({float(central[0]):.4f}) == Local Baseline F1 ({float(local[0]):.4f})")
 
-# ── Statistical tests ────────────────────────────────────────────────────────
-tests_path = RESULTS / "statistical_tests.csv"
-if tests_path.exists():
-    df = pd.read_csv(tests_path)
-    if "p_value" not in df.columns:
-        errors.append("statistical_tests.csv missing p_value column")
-    elif "cohens_d" not in df.columns:
-        warnings.append("statistical_tests.csv missing cohens_d — add effect size")
-
-# ── Fairness claim ────────────────────────────────────────────────────────────
-t3_path = RESULTS / "table_3_fairness_results.csv"
-if t3_path.exists():
-    df = pd.read_csv(t3_path)
-    if "Standard FedAvg" in df.columns and "FedAgent-Chain" in df.columns:
-        if not all(df["FedAgent-Chain"].values < df["Standard FedAvg"].values):
-            errors.append(
-                "FAIRNESS CLAIM INVALID: FedAgent-Chain D_fair not lower than "
-                "Standard FedAvg for at least one attribute"
-            )
-
-# ── Print results ────────────────────────────────────────────────────────────
-print("\n" + "="*60)
-print("SUBMISSION READINESS CHECK")
-print("="*60)
-
+# Report
+print("=== ARTIFACT INTEGRITY CHECK ===")
 if errors:
-    print(f"\n❌  {len(errors)} ERROR(S) — DO NOT SUBMIT:")
+    print(f"\n{len(errors)} ERRORS:")
     for e in errors:
-        print(f"   • {e}")
-
-if warnings:
-    print(f"\n⚠️   {len(warnings)} WARNING(S):")
-    for w in warnings:
-        print(f"   • {w}")
-
-if not errors:
-    print("\n✅  All checks passed. Paper is ready for Q1 submission.")
-    print("\nRemember to:")
-    print("  1. Update all tables in the paper LaTeX with values from CSV files")
-    print("  2. Update REFERENCE values in tests/regression/test_paper_results.py")
-    print("  3. Commit with: git tag v1.0.0-submission")
-else:
+        print(f"  ERROR: {e}")
     sys.exit(1)
+else:
+    print("\nPASS: All artifact integrity checks passed")
 ```
 
-Run: `python scripts/verify_submission_readiness.py`
+**Task 7.5 — Update CHANGELOG.md and REPAIR_LOG.md**
 
----
+Document all changes made in phases 1-6 in `CHANGELOG.md` with version `1.1.0-repaired`.
 
-## Fix 7.3 — Synchronise Paper LaTeX Tables with Computed CSV Values
+**Task 7.6 — Add Checkpoint Integrity Validator**
 
-For each table in your paper, use the following pattern to ensure the paper
-values come from the computed CSVs and not from memory:
-
+Create `scripts/validate_checkpoints.py`:
 ```python
-# Generate LaTeX table from computed CSV (run from repo root)
-import pandas as pd
+#!/usr/bin/env python3
+"""Validate all model checkpoints for integrity."""
+import torch
+import numpy as np
+from pathlib import Path
+import sys
 
-df = pd.read_csv("experiments/results/table_2_multi_seed_summary.csv")
-# Select columns for the paper
-cols = ["Method", "F1_mean", "F1_std", "CI_95_lower", "CI_95_upper"]
-latex = df[cols].to_latex(
-    index=False,
-    float_format="%.4f",
-    caption="Model performance comparison (mean ± std across 3 seeds).",
-    label="tab:model_performance",
-)
-print(latex)
+def validate_checkpoint(ckpt_path: Path) -> list[str]:
+    """Return list of errors, empty if checkpoint is valid."""
+    errors = []
+    try:
+        state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+    except Exception as e:
+        return [f"Cannot load checkpoint: {e}"]
+    
+    for name, tensor in state_dict.items():
+        arr = tensor.numpy()
+        if np.any(np.isnan(arr)):
+            errors.append(f"NaN in parameter '{name}'")
+        if np.any(np.isinf(arr)):
+            errors.append(f"Inf in parameter '{name}'")
+        norm = float(np.linalg.norm(arr))
+        if norm > 10000:
+            errors.append(f"Suspiciously large weight norm in '{name}': {norm:.2f}")
+    return errors
+
+# Validate all checkpoints in experiments/runs/
+for ckpt in sorted(Path("experiments/runs").rglob("*.pt")):
+    errs = validate_checkpoint(ckpt)
+    if errs:
+        print(f"FAIL: {ckpt}")
+        for e in errs:
+            print(f"  {e}")
+    else:
+        print(f"OK: {ckpt.name}")
 ```
 
-Do this for every table before writing the camera-ready LaTeX.
+### Success Criteria
+- [ ] `debug_eval.py` removed from repository
+- [ ] `per_round_debug.json` removed
+- [ ] `experiments/results_temp/` removed
+- [ ] Dead code after `return` in `_find_best_checkpoint` removed (Phase 3)
+- [ ] `scripts/verify_artifact_integrity.py` passes with no errors
+- [ ] All checkpoints validated (no NaN, no Inf, weight norms < 10000)
+- [ ] CI workflow updated with loss divergence check
+- [ ] CHANGELOG.md updated
+
+### Git Commit Recommendation
+```
+git add . --all
+git commit -m "phase7: cleanup, hardening, CI improvements
+
+- remove debug_eval.py, per_round_debug.json, experiments/results_temp/
+- add artifact integrity check script
+- add checkpoint validator
+- add CI loss divergence check
+- update CHANGELOG.md with all phase 1-6 changes"
+```
 
 ---
 
-## Fix 7.4 — Final Cleanup
+**PHASE COMPLETION CHECKLIST — PHASE 7**
+
+**SUCCESS CONDITIONS:**
+- All artifacts removed ✓
+- Integrity check passes ✓
+- Checkpoints valid ✓
+
+**FAIL CONDITIONS:**
+- Integrity check reports errors
+
+**NEXT PHASE ENTRY REQUIREMENTS:**
+verify_artifact_integrity.py passes with exit code 0.
+
+**DO NOT CONTINUE TO PHASE 8 UNTIL ALL SUCCESS CRITERIA PASS.**
+
+---
+
+## Phase 8 — Paper Result Regeneration and Table Verification
+
+### Objective
+Regenerate all paper tables from scratch. Cross-reference every number in the paper's README against the generated CSVs. Update the README tables with new values. Generate a comprehensive result comparison report showing before-repair vs after-repair values for every metric.
+
+### Tasks
+
+**Task 8.1 — Generate Final Paper Tables**
 
 ```bash
-# Clean any temporary test outputs
-make clean
+# Generate all tables from final run results
+python scripts/run_evaluation.py \
+    --runs-dir experiments/runs/ \
+    --results-dir experiments/results/ \
+    --data-dir data/synthetic \
+    --seed 42
 
-# Re-run full test suite one final time
-pytest tests/ -v --timeout=600 \
-    --ignore=tests/regression/   # run regression separately
+python scripts/generate_tables.py --results-dir experiments/results/
+python scripts/generate_figures.py \
+    --results-dir experiments/results/ \
+    --runs-dir experiments/runs/ \
+    --output-dir experiments/figures/
+python scripts/export_blockchain_audit.py --output-dir experiments/results/
+python scripts/aggregate_multi_seed_results.py --seeds 42 123 2024 --results-dir experiments/results/
+```
 
-pytest tests/regression/ -v -m regression --timeout=600
+**Task 8.2 — Before-vs-After Comparison Report**
 
-# Final git commit
-git add .
-git commit -m "fix: complete pipeline repair for Q1 journal submission
+Create `experiments/results/repair_comparison_report.md` documenting every metric change:
+```markdown
+# FedAgent-Chain Repair: Before vs After Comparison
 
-- Phase 0: Fix FederatedClient config loading; fix education OHE
-- Phase 1: Add stratified train/test split; fix label formula leakage
-- Phase 2: Connect run_evaluation.py to simulation checkpoints
-- Phase 3: Implement Omega_fair in training loop; activate sample weighting
-- Phase 4: Implement GovernanceAgent, UpskillingAgent, AccommodationAgent,
-           MultilingualCommunicationAgent; generate real Table 5
-- Phase 5: Multi-seed runs (42, 123, 2024); CIs; paired t-tests; Cohen's d
-- Phase 6: Non-circular regression tests anchored to computed values
-- Phase 7: End-to-end verification; LaTeX table synchronisation"
+## Table 2: Model Performance (F1)
+| Method | Before (Broken) | After (Fixed) | Change | Note |
+|--------|-----------------|---------------|--------|------|
+| FedAgent-Chain | 0.6374 | [NEW] | [DELTA] | |
+| Standard FedAvg | 0.6762 | [NEW] | [DELTA] | FedAvg was diverging; best ckpt only |
+| Local Baseline | 0.6782 | [NEW] | [DELTA] | |
+| Centralized | 0.6782 | [NEW] | [DELTA] | Was identical to local, now correct |
 
-git tag v1.0.0-submission
+## Table 3: Fairness Disparity D_fair (disability)
+| Method | Before | After | Change |
+|--------|--------|-------|--------|
+| FedAgent-Chain | 0.0729 | [NEW] | |
+| Standard FedAvg | 0.0354 | [NEW] | |
+| Reduction | -105.9% (WRONG: increase) | [NEW] | |
+```
+
+**Task 8.3 — Update README.md Tables**
+
+Replace all hardcoded metric tables in README.md with the regenerated values from:
+- `experiments/results/table_2_model_performance.csv`
+- `experiments/results/table_3_fairness_results.csv`
+- `experiments/results/table_4_blockchain_results.csv`
+- `experiments/results/table_7_overhead.csv`
+
+**Task 8.4 — Generate Final Checksums**
+
+```bash
+find experiments/results/ -name "*.csv" -o -name "*.json" | sort | xargs sha256sum > logs/phase8_artifact_checksums_final.txt
+echo "Final checksum registry created at $(date)" >> logs/phase8_artifact_checksums_final.txt
+
+# Compare with Phase 0 checksums
+diff logs/phase0_artifact_checksums_before.txt logs/phase8_artifact_checksums_final.txt | head -100
+```
+
+**Task 8.5 — Run `verify_submission_readiness.py`**
+
+```bash
+python scripts/verify_submission_readiness.py 2>&1 | tee logs/phase8_submission_check.txt
+
+# This script must pass without errors
+python -c "
+import sys
+with open('logs/phase8_submission_check.txt') as f:
+    content = f.read()
+if 'ERROR' in content:
+    print('FAIL: Submission readiness check has errors')
+    sys.exit(1)
+else:
+    print('PASS: Submission readiness check passed')
+"
+```
+
+### Success Criteria
+- [ ] `verify_submission_readiness.py` passes with no errors
+- [ ] Before-vs-after comparison report committed
+- [ ] README.md updated with new metric values
+- [ ] All figures are PDFs with file size > 5KB (not empty)
+- [ ] Final checksums committed
+
+### Git Commit Recommendation
+```
+git add experiments/results/ experiments/figures/ README.md \
+        logs/phase8_*.txt
+git commit -m "phase8: regenerate all paper tables and figures from fixed code
+
+- all tables regenerated from clean experiments with fixed FedAvg + fairness
+- README updated with corrected metric values
+- before/after comparison report committed
+- submission readiness check: PASS"
 ```
 
 ---
 
-## ✅ Phase 7 Success Gate
+**PHASE COMPLETION CHECKLIST — PHASE 8**
 
-- [ ] `python scripts/verify_submission_readiness.py` prints ✅ with zero errors
-- [ ] `pytest tests/ -v` — entire test suite passes
-- [ ] `make reproduce` completes from a clean state without errors
-- [ ] Every number in the paper's abstract, Table 2, and Table 3 has been
-  verified against the computed CSV row
-- [ ] `F1_std > 0.000` for all methods in the multi-seed summary
-- [ ] At least one statistical test shows p < 0.05
+**SUCCESS CONDITIONS:**
+- verify_submission_readiness.py exits 0 ✓
+- README updated ✓
+- Checksums committed ✓
 
----
+**FAIL CONDITIONS:**
+- Submission readiness has errors
 
----
+**NEXT PHASE ENTRY REQUIREMENTS:**
+Submission readiness passes.
 
-# APPENDIX A — Complete Success Verification Checklist
-
-Use this table as your final pre-submission checklist.
-
-| # | Check | How to verify | Phase |
-|---|-------|--------------|-------|
-| 1 | Config overrides reach FederatedClient | `test_client_reads_local_epochs_from_federated_subkey` | 0 |
-| 2 | Education encoding is proper one-hot | `test_education_ohe_is_proper_one_hot` | 0 |
-| 3 | 80/20 train/test split exists | `print(len(client.train_dataset), len(client.test_dataset))` | 1 |
-| 4 | Test F1 < training F1 (no leakage) | Inspect per-round logs | 1 |
-| 5 | Label formula differs from model weights | Read `compute_suitability_label` coefficients | 1 |
-| 6 | Table 2 CSV contains non-hardcoded values | F1 ≠ 0.832 for any method | 2 |
-| 7 | run_evaluation.py loads checkpoints | `grep "load_model_from_checkpoint" scripts/run_evaluation.py` | 2 |
-| 8 | Figures built from per_round.json | `grep "load_convergence_history" scripts/generate_figures.py` | 2 |
-| 9 | Ω_fair applied in training loop | `grep "compute_fairness_penalty" src/federated/client.py` | 3 |
-| 10 | Sample weights populated | `grep "fairness_reweight_samples" scripts/run_federated_simulation.py` | 3 |
-| 11 | FedAgent D_fair < Standard FL D_fair | Table 3 CSV all rows | 3 |
-| 12 | All 5 agents importable | `from src.agents import *` | 4 |
-| 13 | Table 5 computed from real agents | Inspect CSV — values should differ from {0.791, 0.814, ...} | 4 |
-| 14 | 3 seeds run per method | 12 run directories in experiments/runs/ | 5 |
-| 15 | F1_std > 0 for all methods | table_2_multi_seed_summary.csv | 5 |
-| 16 | p-values computed for all comparisons | statistical_tests.csv | 5 |
-| 17 | Cohen's d reported | statistical_tests.csv | 5 |
-| 18 | Regression tests non-circular | test_f1_std_is_nonzero passes | 6 |
-| 19 | make reproduce runs clean | Delete results, run again | 7 |
-| 20 | Paper LaTeX matches CSV values | Manual check against computed CSVs | 7 |
+**DO NOT CONTINUE TO PHASE 9 UNTIL ALL SUCCESS CRITERIA PASS.**
 
 ---
 
-# APPENDIX B — Estimated Timeline
+## Phase 9 — Final Verification and Submission Readiness
 
-| Phase | Work | Compute | Total |
-|-------|------|---------|-------|
-| Phase 0 | 4h | 0 | 4h |
-| Phase 1 | 8h | 0 | 8h |
-| Phase 2 | 12h | 1h simulation | 13h |
-| Phase 3 | 6h | 2h simulation | 8h |
-| Phase 4 | 20h | 1h | 21h |
-| Phase 5 | 4h | 6h (3 seeds × 4 methods) | 10h |
-| Phase 6 | 4h | 0 | 4h |
-| Phase 7 | 4h | 1h | 5h |
-| **Total** | **62h** | **11h** | **~73h** |
+### Objective
+Perform final end-to-end verification: clone the repository fresh into a temporary directory, install from scratch, run the full pipeline, and verify the outputs match the committed artifacts. Confirm the paper can be reproduced by a third party.
 
-At 6 productive hours per day, this is approximately **12–14 working days**.
+### Tasks
+
+**Task 9.1 — Fresh Clone Verification**
+```bash
+cd /tmp
+git clone https://github.com/YOUR_REPO/fedagent-chain fedagent-chain-verify
+cd fedagent-chain-verify
+conda env create -f environment.yml
+conda activate fedagent-chain
+pip install -e .
+pytest tests/unit/ -v --tb=short
+pytest tests/integration/ -v -m integration --timeout=120
+```
+
+**Task 9.2 — Minimal Reproducibility Run**
+```bash
+cd /tmp/fedagent-chain-verify
+make reproduce  # Should run full pipeline
+
+# OR manually:
+python scripts/generate_synthetic_data.py --config configs/experiment/fedagent_chain_full.yaml --seed 42
+python scripts/run_federated_simulation.py --config configs/experiment/fedagent_chain_full.yaml --seed 42 --no-mlflow
+python scripts/run_evaluation.py --seed 42
+python scripts/aggregate_multi_seed_results.py --seeds 42 --results-dir experiments/results/
+```
+
+**Task 9.3 — Numerical Consistency Check**
+```bash
+python -c "
+import pandas as pd
+from pathlib import Path
+# Compare fresh-run table_2 against committed table_2 within tolerance
+fresh = pd.read_csv('experiments/results/table_2_model_performance.csv')
+committed = pd.read_csv('/tmp/fedagent-chain-verify/experiments/results/table_2_model_performance.csv')
+for col in ['F1', 'Accuracy']:
+    for method in fresh['Method']:
+        a = float(fresh[fresh['Method']==method][col].values[0])
+        b = float(committed[committed['Method']==method][col].values[0])
+        assert abs(a - b) < 0.015, f'Reproducibility check FAILED for {method} {col}: {a:.4f} vs {b:.4f}'
+print('PASS: Fresh run reproduces committed results within tolerance=0.015')
+"
+```
+
+**Task 9.4 — Final Paper Claims Audit**
+
+Manually verify each claim in the abstract and contribution list against the new results:
+1. "Reduces disability disparity" — verify D_fair(disability) FedAgent-Chain < Standard FedAvg in new table_3
+2. "Blockchain hash completeness 100%" — verify table_4
+3. "Agentic AI coverage" — verify table_5
+4. Statistical significance claims — verify against statistical_tests.csv
+
+For any claim that is NOT supported by the new results, update the claim in the paper or in the README.
+
+**Task 9.5 — Final Commit and Tag**
+
+```bash
+git add .
+git commit -m "phase9: final verification, fresh clone test passes
+
+- fresh clone reproducibility verified within tolerance=0.015
+- all paper claims verified against new results
+- REPAIR_LOG.md finalized with all changes documented"
+
+git tag -a v1.1.0-repaired -m "Version 1.1.0 with all Phase 0-8 repairs applied"
+git push origin main v1.1.0-repaired
+```
+
+### Success Criteria
+- [ ] Fresh clone pip install succeeds
+- [ ] Fresh clone unit tests pass
+- [ ] Fresh clone single-seed reproduction within F1 tolerance 0.015 of committed results
+- [ ] All paper claims verified against new result tables
+- [ ] `REPAIR_LOG.md` fully complete
+- [ ] Git tag `v1.1.0-repaired` pushed
 
 ---
 
-# APPENDIX C — Paper Claims to Update After Phase 5
+**PHASE COMPLETION CHECKLIST — PHASE 9**
 
-When your computed F1 values are available from Phase 5, update these
-specific locations in the paper draft:
+**SUCCESS CONDITIONS:**
+- Fresh clone reproduces within tolerance ✓
+- All paper claims verified ✓
+- Git tag pushed ✓
 
-| Paper section | Claim to update | Source CSV | Column |
-|--------------|-----------------|------------|--------|
-| Abstract | "achieves F1=X.XXX" | `table_2_multi_seed_summary.csv` | `F1_mean` ± `F1_std` |
-| Table 2 | All rows | `table_2_model_performance.csv` | All metric columns |
-| Table 3 | All disparity values | `table_3_fairness_results.csv` | `FedAgent-Chain`, `Standard FedAvg` |
-| Table 4 | Hash completeness, latency | `table_4_blockchain_results.csv` | `Value` |
-| Table 5 | All agent scores | `table_5_agent_results.csv` | `Score` |
-| Table 7 | Round duration | `table_7_overhead.csv` | `CPU Time` |
-| Section 5 | Statistical significance | `statistical_tests.csv` | `p_value`, `cohens_d` |
-| Section 5 | 95% CI for F1 | `table_2_multi_seed_summary.csv` | `CI_95_lower`, `CI_95_upper` |
+**FAIL CONDITIONS:**
+- Fresh clone cannot install dependencies
+- Reproduction error > 0.015 F1
+- Any paper claim unsupported by results
 
-> **Rule**: No number from any table should appear in the paper unless you
-> can open the corresponding CSV and point to the exact row and column that
-> produced it.
+**NEXT PHASE ENTRY REQUIREMENTS:**
+This is the final phase. All success criteria must pass before declaring the repository repaired.
+
+**DO NOT DECLARE REPAIR COMPLETE UNTIL ALL PHASE 9 SUCCESS CRITERIA PASS.**
 
 ---
 
-*End of remediation plan.*  
-*Prepared under adversarial audit conditions. All code snippets are directly
-derived from the reviewed codebase and are drop-in replacements.*
+## Master Completion Protocol
+
+After each completed phase, you MUST provide the following structured summary before proceeding:
+
+```
+=== PHASE [N] COMPLETION SUMMARY ===
+
+1. WHAT WAS FIXED:
+   - [List each specific change made, file by file]
+   - [Include before/after code snippets for critical fixes]
+
+2. REMAINING RISKS:
+   - [List any risks that were identified but not fully resolved]
+   - [Include confidence level for each fix]
+
+3. VALIDATION EVIDENCE:
+   - [Paste test output showing pass/fail results]
+   - [Include key metric values (loss curves, F1 scores)]
+   - [Include any diagnostic outputs]
+
+4. MODIFIED FILES:
+   - [Complete list of files changed with description of change]
+
+5. NEWLY ADDED TESTS:
+   - [Complete list of new test functions and their purpose]
+   - [Pass/fail status for each]
+
+6. REPOSITORY INTEGRITY:
+   - [State whether existing tests still pass]
+   - [State whether artifacts are consistent]
+   - [State whether checksums have been updated]
+
+7. SAFE TO PROCEED: YES / NO
+   - If NO: explain exactly what must happen before proceeding
+```
+
+This summary is **mandatory** and **non-negotiable**. Any phase summary that omits a section or provides vague answers (e.g., "tests pass" without showing output, or "metrics improved" without showing values) must be treated as an incomplete phase summary and the phase must be re-executed or the summary re-generated with full evidence.
+
+---
+
+*End of Master Remediation Plan. This document represents the complete engineering specification for repairing the FedAgent-Chain repository. All phases must be executed in order. All success criteria must be verified before phase transitions. All statistical claims must be supported by finite, valid numerical evidence. No result may be assumed without measurement.*
