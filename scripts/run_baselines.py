@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=str, required=True, help="Baseline config YAML.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", type=str, default=None)
+    parser.add_argument("--override", nargs="*", help="OmegaConf dot-list overrides.")
     return parser.parse_args()
 
 
@@ -34,25 +35,28 @@ def main() -> None:
     setup_logging(format="console")
     set_global_seed(args.seed)
 
+    from omegaconf import OmegaConf
     cfg = load_config(args.config)
+    if args.override:
+        override_cfg = OmegaConf.from_dotlist(args.override)
+        cfg = OmegaConf.merge(cfg, override_cfg)
+        
     exp_name = cfg.get("experiment", {}).get("name", "baseline")
     logger.info("Running baseline", experiment=exp_name, seed=args.seed)
 
     # For baselines, we import and reuse the federated simulation infrastructure
-    # but with a single round and no aggregation.
-    from scripts.run_federated_simulation import main as run_main
-    import sys
-    sys.argv = [
-        "run_federated_simulation.py",
-        "--config", args.config,
-        "--seed", str(args.seed),
-        "--no-fairness",
-        "--no-mlflow",
-    ]
-    if args.output_dir:
-        sys.argv += ["--output-dir", args.output_dir]
-
-    run_main()
+    from scripts.run_federated_simulation import run_simulation_from_config
+    
+    output_dir = Path(args.output_dir) if args.output_dir else Path(f"experiments/runs/{exp_name}_seed{args.seed}")
+    
+    run_simulation_from_config(
+        cfg=cfg,
+        seed=args.seed,
+        output_dir=output_dir,
+        data_dir=Path("data/synthetic"),
+        use_fairness=False,
+        use_mlflow=False,
+    )
 
 
 if __name__ == "__main__":
