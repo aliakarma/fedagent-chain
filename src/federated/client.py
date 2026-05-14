@@ -166,6 +166,12 @@ class FederatedClient:
                     try:
                         batch_group_labels = self._get_batch_group_labels(batch)
                         if batch_group_labels is not None:
+                            # Verify alignment: same number of labels as batch samples
+                            assert len(batch_group_labels) == len(batch["label"]), (
+                                f"Group label count ({len(batch_group_labels)}) != "
+                                f"batch size ({len(batch['label'])})"
+                            )
+
                             y_true_np = labels.detach().cpu().numpy().astype(int)
                             y_pred_np = (preds.detach().cpu().numpy() >= 0.5).astype(int)
                             group_f1s = group_performance_from_predictions(
@@ -182,8 +188,20 @@ class FederatedClient:
                                 if len(group_means) >= 2:
                                     vals = torch.stack(list(group_means.values()))
                                     diff = vals.max() - vals.min()
+                                    fairness_penalty_value = float(diff.item())
                                     loss = loss + lambda_fair * diff
-                    except Exception as e:
+                                    
+                                    # Log fairness penalty magnitude every 50 batches
+                                    if batch_counter % 50 == 0:
+                                        self.logger.debug(
+                                            "Fairness penalty applied",
+                                            node_id=self.node_id,
+                                            batch=batch_counter,
+                                            n_groups_in_batch=len(group_means),
+                                            fairness_penalty=round(fairness_penalty_value, 6),
+                                            lambda_fair=lambda_fair,
+                                        )
+                    except (Exception, AssertionError) as e:
                         # Never let fairness penalty crash training
                         self.logger.debug("Fairness penalty skipped", error=str(e))
 
@@ -288,25 +306,48 @@ class FederatedClient:
         return metrics
 
     def _get_batch_group_labels(self, batch: dict) -> np.ndarray | None:
-        """Extract disability_category labels for samples in this batch.
+        """Return disability_category group labels for the exact samples in this batch.
 
-        Returns None if group labels are unavailable (graceful degradation).
+        Uses the dataset index stored in batch['idx'] (added in EmploymentDataset.__getitem__)
+        to look up the correct group labels for each sample in the shuffled batch.
+
+        Returns None gracefully if group labels are unavailable.
         """
-        # The batch index is not passed directly; we look it up from the dataset
-        # For efficiency we build a lookup once and cache it.
         if not hasattr(self, "_group_label_cache"):
             try:
                 self._group_label_cache = self.train_dataset.get_group_labels(
                     "disability_category"
                 )
             except Exception:
+                self.logger.warning(
+                    "Failed to build group label cache for fairness penalty",
+                    node_id=self.node_id,
+                )
                 self._group_label_cache = None
 
         if self._group_label_cache is None:
             return None
 
-        # DataLoader does not give us original indices in the default setup.
-        # We use the batch label values as a proxy — groups are inferred from
-        # the full training set distribution rather than per-batch exact mapping.
-        # For the fairness penalty, approximate group distribution is sufficient.
-        return self._group_label_cache[: len(batch["label"])]
+        batch_indices = batch.get("idx")
+        if batch_indices is None:
+            self.logger.warning(
+                "Batch does not contain 'idx' key — fairness penalty cannot be applied. "
+                "Ensure EmploymentDataset.__getitem__ returns 'idx'.",
+                node_id=self.node_id,
+            )
+            return None
+
+        indices = batch_indices.cpu().numpy().astype(int)
+
+        # Bounds check
+        max_idx = len(self._group_label_cache) - 1
+        if np.any(indices > max_idx) or np.any(indices < 0):
+            self.logger.error(
+                "Batch indices out of bounds for group label cache",
+                max_cache_idx=max_idx,
+                batch_idx_range=(int(indices.min()), int(indices.max())),
+                node_id=self.node_id,
+            )
+            return None
+
+        return self._group_label_cache[indices]

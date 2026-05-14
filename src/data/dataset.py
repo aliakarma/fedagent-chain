@@ -180,6 +180,7 @@ class EmploymentDataset(Dataset):
         item: Dict[str, torch.Tensor] = {
             "features": torch.from_numpy(features),
             "label": torch.tensor(label, dtype=torch.float32),
+            "idx": torch.tensor(idx, dtype=torch.long),
         }
 
         if self.sample_weights is not None:

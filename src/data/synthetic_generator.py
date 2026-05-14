@@ -317,9 +317,9 @@ def generate_synthetic_node_data(
             )
         )
 
-    users_df = pd.DataFrame([u.model_dump() for u in users])
-    jobs_df = pd.DataFrame([j.model_dump() for j in jobs])
-    outcomes_df = pd.DataFrame([o.model_dump() for o in outcomes])
+    users_df = pd.DataFrame([u.model_dump(mode="json") for u in users])
+    jobs_df = pd.DataFrame([j.model_dump(mode="json") for j in jobs])
+    outcomes_df = pd.DataFrame([o.model_dump(mode="json") for o in outcomes])
 
     logger.info(
         "Node data generated",

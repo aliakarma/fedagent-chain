@@ -151,8 +151,8 @@ class FairnessAwareFedAvgAggregator(FedAvgAggregator):
             Fairness adjustment factor ρ_k ≥ 1.0.
         """
         min_group_score = fairness_scores.get(node_id, 1.0)
-        # Nodes with lower min-group performance get higher weight
-        rho = 1.0 + self.lambda_fairness * (1.0 - min_group_score)
+        # Nodes with higher min-group performance get higher weight
+        rho = 1.0 + self.lambda_fairness * min_group_score
         return float(rho)
 
     def compute_weights(  # type: ignore[override]
