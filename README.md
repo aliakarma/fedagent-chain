@@ -202,34 +202,34 @@ python scripts/generate_figures.py \
     --output-dir experiments/figures/
 ```
 
-### Empirical Results (Phase 3 — Seed 42, 20 rounds, 4 nodes)
+### Empirical Results (Phase 3 — Seed 42, 10 rounds, 4 nodes)
 
 **Table 2: Model Performance (F1 on held-out test sets)**
 
 | Method | Accuracy | Precision | Recall | F1 | F1 Std |
 |---|---|---|---|---|---|
-| **FedAgent-Chain** | 0.5263 | 0.5253 | 0.8214 | **0.6374** | 0.0714 |
-| Standard FedAvg | 0.5267 | 0.5231 | 0.9744 | 0.6762 | 0.0800 |
-| Local Baseline | 0.5194 | 0.5191 | 0.9977 | 0.6782 | 0.0801 |
-| Centralized | 0.5194 | 0.5191 | 0.9977 | 0.6782 | 0.0801 |
+| **FedAgent-Chain** | 0.7534 | 0.7374 | 0.7996 | **0.7627** | 0.0695 |
+| Standard FedAvg | 0.7541 | 0.7395 | 0.7951 | 0.7621 | 0.0707 |
+| Local Baseline | 0.5377 | 0.5331 | 0.9826 | 0.6868 | 0.0775 |
+| Centralized | 0.7327 | 0.7590 | 0.6960 | 0.7237 | 0.0678 |
 
 **Table 3: Fairness Disparity (D_fair)**
 
 | Protected Attribute | FedAgent-Chain | Standard FedAvg | Reduction |
 |---|---|---|---|
-| Disability Category | 0.0729 | 0.0354 | -105.9% |
-| Language Group | 0.3499 | 0.3875 | **+9.7%** |
-| Work Mode | 0.0280 | 0.0008 | -3400.0% |
-| Regional Node | 0.1890 | 0.2050 | **+7.8%** |
+| Disability Category | 0.0377 | 0.0388 | **+2.8%** |
+| Language Group | 0.4825 | 0.4834 | **+0.2%** |
+| Work Mode | 0.0080 | 0.0055 | -45.5% |
+| Regional Node | 0.1667 | 0.1703 | **+2.1%** |
 
 **Table 4: Blockchain Audit**
-- Hash completeness: **100%** (80/80 records)
-- Chain integrity: **Valid** (9-block chain)
-- Total audit records: 80 (4 nodes × 20 rounds)
+- Hash completeness: **100%** (40/40 records)
+- Chain integrity: **Valid** (5-block chain)
+- Total audit records: 40 (4 nodes × 10 rounds)
 
 **Table 7: System Overhead**
-- Average round duration: **~96s** (4 nodes × 3 local epochs)
-- Total simulation time: **~1926s** for 20 FL rounds
+- Average round duration: **~87s** (4 nodes × 3 local epochs)
+- Total simulation time: **~866s** for 10 FL rounds
 
 > **Implementation note**: The model uses `LayerNorm` instead of `BatchNorm1d` to ensure stability
 > in federated learning across Non-IID nodes. This prevents the "running stats corruption" issue
