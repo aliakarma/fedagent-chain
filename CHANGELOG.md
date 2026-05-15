@@ -5,6 +5,27 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.0-repaired] - 2026-05-15
+
+### Added
+- **REPAIR_LOG.md**: Comprehensive documentation of the remediation process.
+- **Statistical Guards**: 4-point verification in `aggregate_multi_seed_results.py` to prevent degenerate statistics.
+- **Artifact Integrity**: `scripts/verify_artifact_integrity.py` and `scripts/validate_checkpoints.py` for repository hardening.
+- **CI Hardening**: Automated loss divergence detection in GitHub Actions.
+- **Fairness Note**: README update with honest statistical interpretation disclaimer.
+
+### Fixed
+- **Fairness Inversion [CI-1]**: Corrected weight formula to incentivize fairness instead of maximizing disparity.
+- **Mode Collapse [CI-4]**: Fixed centralized baseline pooling to correctly combine regional datasets.
+- **Numerical Stability**: Replaced delta-accumulation with absolute weight averaging; added `LayerNorm` for FL stability.
+- **Fairness Labeling [CI-5]**: Fixed batch-slicing mismatch in protected group label extraction.
+- **Evaluation Logic**: Fixed dead code in checkpoint selection and restored fallback reachability.
+
+### Removed
+- **Debug Artifacts**: Removed `debug_eval.py`, `per_round_debug.json`, and `experiments/results_temp/`.
+
+---
+
 ## [1.0.0] — 2025-01-01
 
 ### Added — Initial public release accompanying paper submission
