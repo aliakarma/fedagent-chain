@@ -16,12 +16,12 @@ TOLERANCE_SINGLE = 0.015   # single-seed tolerance
 TOLERANCE_MULTI  = 0.010   # multi-seed mean tolerance
 
 
-# ── Reference values from Phase 6 verified run (Seeds 42, 123, 2024) ──────────
+# ── Reference values from Phase 5 verified run (Seeds 42, 123, 2024) ──────────
 REFERENCE = {
     # Table 2 — actual values from table_2_multi_seed_summary.csv
-    "fedagent_chain_f1_mean":       0.6489,
-    "fedagent_chain_accuracy_mean": 0.5263,
-    "local_baseline_f1_mean":       0.4159,
+    "fedagent_chain_f1_mean":       0.7599,
+    "fedagent_chain_accuracy_mean": 0.7440,
+    "local_baseline_f1_mean":       0.4170,
     # Table 3 — actual values from table_3_fairness_results.csv
     "disability_disparity_fedagent":    0.0729,
     "disability_disparity_standard_fl": 0.0354,

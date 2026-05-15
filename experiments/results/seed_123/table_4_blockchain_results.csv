@@ -1,5 +1,5 @@
 Metric,Value,Description
 Hash Completeness,100.0%,Fraction of records with valid SHA-256 hash
 Chain Integrity,Valid,SHA-256 hash chain verification result
-Total Audit Records,80,Model update hashes submitted
-Chain Length (blocks),9,Number of finalized blocks
+Total Audit Records,40,Model update hashes submitted
+Chain Length (blocks),5,Number of finalized blocks

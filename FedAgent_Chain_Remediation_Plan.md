@@ -2405,7 +2405,7 @@ Perform final end-to-end verification: clone the repository fresh into a tempora
 **Task 9.1 — Fresh Clone Verification**
 ```bash
 cd /tmp
-git clone https://github.com/YOUR_REPO/fedagent-chain fedagent-chain-verify
+git clone https://github.com/aliakarma/fedagent-chain fedagent-chain-verify
 cd fedagent-chain-verify
 conda env create -f environment.yml
 conda activate fedagent-chain
