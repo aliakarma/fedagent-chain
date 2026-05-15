@@ -1,4 +1,4 @@
-comparison,mean_diff,t_statistic,p_value,cohens_d,significant
-FedAgent-Chain vs Standard FedAvg,0.2337,1.3877,0.2996,0.8012,False
-FedAgent-Chain vs Local Baseline,0.2337,1.3877,0.2996,0.8012,False
-FedAgent-Chain vs Centralized,0.2337,1.3877,0.2996,0.8012,False
+comparison,mean_diff,t_statistic,p_value,cohens_d,significant,n_seeds,warning
+FedAgent-Chain vs Standard FedAvg,-0.0004,-0.3753,0.7435,-0.2167,False,3,"With n=3 seeds, statistical power is limited. p < 0.05 requires very large effect sizes."
+FedAgent-Chain vs Local Baseline,0.3429,1.8944,0.1987,1.0937,False,3,"With n=3 seeds, statistical power is limited. p < 0.05 requires very large effect sizes."
+FedAgent-Chain vs Centralized,0.0325,6.2494,0.0247,3.6081,True,3,"With n=3 seeds, statistical power is limited. p < 0.05 requires very large effect sizes."

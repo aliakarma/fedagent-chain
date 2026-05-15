@@ -95,3 +95,4 @@ blockchain_storage/
 # Distribution
 *.tar.gz
 *.zip
+/verify

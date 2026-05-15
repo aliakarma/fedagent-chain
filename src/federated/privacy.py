@@ -180,4 +180,16 @@ def protect_state_dict(
         flat = param.flatten()
         protected_flat = protect_update(flat, C=C, sigma=sigma, seed=param_seed)
         protected[name] = protected_flat.reshape(param.shape)
+
+    # DP Diagnostics
+    original_norms = {name: float(np.linalg.norm(state_dict[name])) for name in state_dict}
+    protected_norms = {name: float(np.linalg.norm(protected[name])) for name in protected}
+    logger.debug(
+        "DP protection applied to state dict",
+        n_params=len(state_dict),
+        max_original_norm=round(max(original_norms.values()), 4),
+        max_protected_norm=round(max(protected_norms.values()), 4),
+        C=C,
+        sigma=sigma,
+    )
     return protected

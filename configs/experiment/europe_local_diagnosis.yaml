@@ -1,0 +1,21 @@
+experiment:
+  name: europe_local_diagnosis
+  variant: diagnosis
+seed: 42
+federated:
+  n_rounds: 1
+  local_epochs: 50
+  batch_size: 64
+  learning_rate: 0.001
+  min_clients: 1
+privacy:
+  enabled: false
+fairness:
+  enabled: false
+blockchain:
+  enabled: false
+data:
+  nodes: [europe]
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500

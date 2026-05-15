@@ -41,24 +41,77 @@ def run_statistical_tests(
     method_b_scores: list[float],
     method_a_name: str,
     method_b_name: str,
-) -> dict:
-    """Run paired t-test and compute Cohen's d between two methods."""
+) -> dict | None:
+    """Run paired t-test and compute Cohen's d between two methods.
+    
+    Returns None (not a result row) if the test cannot be validly performed.
+    This prevents numerically degenerate results (t=-inf, p=0) from being
+    written to statistical_tests.csv.
+    """
     a = np.array(method_a_scores)
     b = np.array(method_b_scores)
 
+    # Guard 1: Minimum sample size
+    if len(a) < 2:
+        logger.warning(
+            "Insufficient samples for statistical test",
+            method_a=method_a_name,
+            method_b=method_b_name,
+            n_samples=len(a),
+        )
+        return None
+    
+    # Guard 2: Degenerate variance (all values identical)
+    diff = a - b
+    diff_std = float(np.std(diff, ddof=1))
+    if diff_std < 1e-8:
+        logger.warning(
+            "Statistical test degenerate: std(diff) ~ 0. "
+            "This indicates all seeds produced identical results, "
+            "which suggests the per-seed results are copies of a single run "
+            "rather than genuinely independent experiments. "
+            "Test results WILL NOT be written.",
+            method_a=method_a_name,
+            method_b=method_b_name,
+            diff_std=diff_std,
+            a_values=list(a),
+            b_values=list(b),
+        )
+        return None
+    
+    # Guard 3: Values must be in valid range [0, 1] for F1
+    for arr, name in [(a, method_a_name), (b, method_b_name)]:
+        if np.any(arr < 0) or np.any(arr > 1):
+            logger.error(
+                "F1 values out of [0,1] range — data integrity issue",
+                method=name,
+                values=list(arr),
+            )
+            return None
+    
     t_stat, p_value = stats.ttest_rel(a, b)
-
-    # Cohen's d for paired samples
-    diff     = a - b
-    cohens_d = np.mean(diff) / (np.std(diff, ddof=1) + 1e-12)
+    
+    # Guard 4: Check for infinite or NaN results
+    if not np.isfinite(t_stat) or not np.isfinite(p_value):
+        logger.error(
+            "Non-finite t-statistic or p-value despite std > 0 — numerical issue",
+            t_stat=float(t_stat),
+            p_value=float(p_value),
+            diff_std=diff_std,
+        )
+        return None
+    
+    cohens_d = float(np.mean(diff)) / (diff_std + 1e-12)
 
     return {
-        "comparison":     f"{method_a_name} vs {method_b_name}",
-        "mean_diff":      round(float(np.mean(diff)), 4),
-        "t_statistic":    round(float(t_stat), 4),
-        "p_value":        round(float(p_value), 4),
-        "cohens_d":       round(float(cohens_d), 4),
-        "significant":    bool(p_value < 0.05),
+        "comparison": f"{method_a_name} vs {method_b_name}",
+        "mean_diff": round(float(np.mean(diff)), 4),
+        "t_statistic": round(float(t_stat), 4),
+        "p_value": round(float(p_value), 4),
+        "cohens_d": round(float(cohens_d), 4),
+        "significant": bool(p_value < 0.05),
+        "n_seeds": len(a),
+        "warning": "With n=3 seeds, statistical power is limited. p < 0.05 requires very large effect sizes." if len(a) < 5 else None,
     }
 
 
@@ -166,7 +219,8 @@ def main() -> None:
             f1_by_method[method],
             fedagent_key, method,
         )
-        test_rows.append(result)
+        if result is not None:
+            test_rows.append(result)
 
     if test_rows:
         tests_df = pd.DataFrame(test_rows)

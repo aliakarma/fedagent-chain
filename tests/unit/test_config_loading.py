@@ -54,3 +54,29 @@ def test_education_ohe_is_proper_one_hot():
     edu_slice = features[81:86]
     assert edu_slice[3] == 1.0, "Expected one-hot at position 3 for edu_level=3"
     assert sum(edu_slice) == pytest.approx(1.0), "Education OHE must sum to 1"
+
+
+def test_centralized_dataset_pooling():
+    from src.data.dataset import EmploymentDataset
+    from scripts.run_federated_simulation import pool_node_datasets
+    
+    # Create mock data for node A
+    outcomes_a = pd.DataFrame({"user_id": ["u1"], "job_id": ["j1"], "suitability_label": [1]})
+    users_a = pd.DataFrame({"user_id": ["u1"], "attr": [0]}).set_index("user_id")
+    jobs_a = pd.DataFrame({"job_id": ["j1"], "attr": [0]}).set_index("job_id")
+    ds_a = EmploymentDataset(outcomes_a, users_a, jobs_a)
+    
+    # Create mock data for node B
+    outcomes_b = pd.DataFrame({"user_id": ["u2"], "job_id": ["j2"], "suitability_label": [0]})
+    users_b = pd.DataFrame({"user_id": ["u2"], "attr": [1]}).set_index("user_id")
+    jobs_b = pd.DataFrame({"job_id": ["j2"], "attr": [1]}).set_index("job_id")
+    ds_b = EmploymentDataset(outcomes_b, users_b, jobs_b)
+    
+    # Pool them (using same DS for train/test for simplicity in mock)
+    pooled_train, pooled_test = pool_node_datasets([ds_a, ds_b], [ds_a, ds_b])
+    
+    assert len(pooled_train) == 2, "Pooled training set should have 2 samples"
+    assert len(pooled_test) == 2, "Pooled test set should have 2 samples"
+    assert set(pooled_train.outcomes["user_id"]) == {"u1", "u2"}
+    assert len(pooled_train.users_df) == 2
+    assert len(pooled_train.jobs_df) == 2

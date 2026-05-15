@@ -146,9 +146,9 @@ def main() -> None:
 
     # Load and optionally override config
     cfg = load_config(args.config)
-    for override in args.override:
-        key, _, value = override.partition("=")
-        OmegaConf.update(cfg, key, value, merge=True)
+    if args.override:
+        override_cfg = OmegaConf.from_dotlist(args.override)
+        cfg = OmegaConf.merge(cfg, override_cfg)
 
     # Create run output directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -157,11 +157,57 @@ def main() -> None:
     output_dir = Path(args.output_dir or f"experiments/runs/{run_name}")
     ensure_dir(output_dir)
 
+    use_mlflow = not args.no_mlflow and cfg.get("tracking", {}).get("use_mlflow", True)
+    use_fairness = not args.no_fairness and cfg.get("fairness", {}).get("enabled", True)
+
+    run_simulation_from_config(
+        cfg=cfg,
+        seed=args.seed,
+        output_dir=output_dir,
+        data_dir=Path(args.data_dir),
+        use_fairness=use_fairness,
+        use_mlflow=use_mlflow,
+        run_name=run_name
+    )
+
+
+def pool_node_datasets(all_train_ds: list[EmploymentDataset], all_test_ds: list[EmploymentDataset]) -> tuple[EmploymentDataset, EmploymentDataset]:
+    """Combine datasets from multiple nodes into single pooled train/test sets."""
+    # Combine into single pooled datasets
+    pooled_train_outcomes = pd.concat([ds.outcomes for ds in all_train_ds], ignore_index=True)
+    pooled_train_users = pd.concat([ds.users_df.reset_index() for ds in all_train_ds]).drop_duplicates("user_id")
+    pooled_train_jobs = pd.concat([ds.jobs_df.reset_index() for ds in all_train_ds]).drop_duplicates("job_id")
+    
+    pooled_test_outcomes = pd.concat([ds.outcomes for ds in all_test_ds], ignore_index=True)
+    pooled_test_users = pd.concat([ds.users_df.reset_index() for ds in all_test_ds]).drop_duplicates("user_id")
+    pooled_test_jobs = pd.concat([ds.jobs_df.reset_index() for ds in all_test_ds]).drop_duplicates("job_id")
+
+    train_ds = EmploymentDataset(pooled_train_outcomes, pooled_train_users, pooled_train_jobs, consent_filter=False)
+    test_ds = EmploymentDataset(pooled_test_outcomes, pooled_test_users, pooled_test_jobs, consent_filter=False)
+    return train_ds, test_ds
+
+
+def run_simulation_from_config(
+    cfg: DictConfig,
+    seed: int,
+    output_dir: Path,
+    data_dir: Path,
+    use_fairness: bool = True,
+    use_mlflow: bool = False,
+    run_name: Optional[str] = None
+) -> Dict:
+    """Run the federated simulation from a config object.
+    
+    Programmatic entry point used by run_baselines.py and tests.
+    """
+    if run_name is None:
+        run_name = f"simulation_seed{seed}"
+
     # Save resolved config and hardware info
     save_json(config_to_dict(cfg), output_dir / "config.json")
     hw_info = log_hardware_info()
     save_json(hw_info, output_dir / "hardware.json")
-    save_json({"git_commit": get_git_commit_hash(), "seed": args.seed}, output_dir / "provenance.json")
+    save_json({"git_commit": get_git_commit_hash(), "seed": seed}, output_dir / "provenance.json")
 
     logger.info("Simulation started", run_name=run_name, output_dir=str(output_dir))
 
@@ -173,16 +219,26 @@ def main() -> None:
     )
 
     # Load datasets for all nodes
-    data_dir = Path(args.data_dir)
     nodes = cfg.get("data", {}).get("nodes", ["saudi_arabia", "united_states", "china", "europe"])
+    is_centralized = cfg.get("data", {}).get("centralized", False)
 
     clients = []
-    for i, node_id in enumerate(nodes):
-        train_ds, test_ds = load_node_dataset(
-            node_id, data_dir, cfg, seed=args.seed + i * 1000
-        )
+    if is_centralized:
+        logger.info("Running in CENTRALIZED mode: pooling all node datasets")
+        all_train_ds = []
+        all_test_ds = []
+        for i, node_id in enumerate(nodes):
+            train_ds, test_ds = load_node_dataset(
+                node_id, data_dir, cfg, seed=seed + i * 1000
+            )
+            all_train_ds.append(train_ds)
+            all_test_ds.append(test_ds)
+        
+        # Combine into single pooled datasets
+        train_ds, test_ds = pool_node_datasets(all_train_ds, all_test_ds)
+        
         client = FederatedClient(
-            node_id=node_id,
+            node_id="centralized_node",
             train_dataset=train_ds,
             test_dataset=test_ds,
             cfg=cfg,
@@ -190,24 +246,36 @@ def main() -> None:
             device="cpu",
         )
         clients.append(client)
-        logger.info(
-            "Client created",
-            node_id=node_id,
-            n_train=len(train_ds),
-            n_test=len(test_ds),
-        )
-
-    # Create server and run simulation
-    use_mlflow = not args.no_mlflow and cfg.get("tracking", {}).get("use_mlflow", True)
-    use_fairness = not args.no_fairness and cfg.get("fairness", {}).get("enabled", True)
+        logger.info("Centralized client created", n_train=len(train_ds), n_test=len(test_ds))
+    else:
+        for i, node_id in enumerate(nodes):
+            train_ds, test_ds = load_node_dataset(
+                node_id, data_dir, cfg, seed=seed + i * 1000
+            )
+            client = FederatedClient(
+                node_id=node_id,
+                train_dataset=train_ds,
+                test_dataset=test_ds,
+                cfg=cfg,
+                blockchain=blockchain,
+                device="cpu",
+            )
+            clients.append(client)
+            logger.info(
+                "Client created",
+                node_id=node_id,
+                n_train=len(train_ds),
+                n_test=len(test_ds),
+            )
 
     if use_mlflow:
+        exp_name = cfg.get("experiment", {}).get("name", "fedagent_chain")
         mlflow_uri = cfg.get("tracking", {}).get("mlflow_tracking_uri", "http://localhost:5000")
         try:
             mlflow.set_tracking_uri(mlflow_uri)
             mlflow.set_experiment(exp_name)
             mlflow.start_run(run_name=run_name)
-            mlflow.log_params({"seed": args.seed, "git_commit": get_git_commit_hash()})
+            mlflow.log_params({"seed": seed, "git_commit": get_git_commit_hash()})
         except Exception as e:
             logger.warning("MLflow connection failed, continuing without tracking", error=str(e))
             use_mlflow = False
@@ -220,7 +288,7 @@ def main() -> None:
         )
 
         start_time = time.time()
-        results = server.run(clients=clients, seed=args.seed, use_mlflow=use_mlflow)
+        results = server.run(clients=clients, seed=seed, use_mlflow=use_mlflow)
         total_duration = time.time() - start_time
 
         results["total_duration_seconds"] = round(total_duration, 2)

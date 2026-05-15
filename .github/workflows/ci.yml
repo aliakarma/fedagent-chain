@@ -131,6 +131,30 @@ jobs:
       - name: Run evaluation (generates result CSVs)
         run: python scripts/run_evaluation.py --results-dir experiments/results/
 
+      - name: Verify no diverging loss in smoke test
+        run: |
+          python -c "
+          import json
+          from pathlib import Path
+          runs = sorted(Path('experiments/runs').glob('fedagent_chain_full_seed42_*'))
+          if not runs:
+              print('No runs found - skipping divergence check')
+              exit(0)
+          latest = runs[-1]
+          per_round = latest / 'metrics' / 'per_round.json'
+          if not per_round.exists():
+              print('No per_round.json - skipping')
+              exit(0)
+          with open(per_round) as f:
+              history = json.load(f)
+          if len(history) < 2:
+              exit(0)
+          losses = [r['mean_train_loss'] for r in history]
+          ratio = losses[-1] / (losses[0] + 1e-8)
+          assert ratio < 5.0, f'Loss diverged: round1={losses[0]:.3f}, final={losses[-1]:.3f}, ratio={ratio:.1f}'
+          print(f'Loss convergence OK: {losses[0]:.3f} -> {losses[-1]:.3f}')
+          "
+
       - name: Run regression tests
         run: pytest tests/regression/ -v -m regression --timeout=300
 

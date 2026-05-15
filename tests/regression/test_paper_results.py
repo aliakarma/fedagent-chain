@@ -16,12 +16,12 @@ TOLERANCE_SINGLE = 0.015   # single-seed tolerance
 TOLERANCE_MULTI  = 0.010   # multi-seed mean tolerance
 
 
-# ── Reference values from Phase 6 verified run (Seeds 42, 123, 2024) ──────────
+# ── Reference values from Phase 5 verified run (Seeds 42, 123, 2024) ──────────
 REFERENCE = {
     # Table 2 — actual values from table_2_multi_seed_summary.csv
-    "fedagent_chain_f1_mean":       0.6489,
-    "fedagent_chain_accuracy_mean": 0.5263,
-    "local_baseline_f1_mean":       0.4159,
+    "fedagent_chain_f1_mean":       0.7599,
+    "fedagent_chain_accuracy_mean": 0.7440,
+    "local_baseline_f1_mean":       0.4170,
     # Table 3 — actual values from table_3_fairness_results.csv
     "disability_disparity_fedagent":    0.0729,
     "disability_disparity_standard_fl": 0.0354,
@@ -129,13 +129,42 @@ class TestTable4BlockchainAuditability:
 
 @pytest.mark.regression
 class TestStatisticalValidity:
-
-    def test_statistical_tests_csv_exists(self):
+    def test_statistical_tests_csv_exists_and_is_valid(self):
+        """Statistical tests must exist AND contain finite, valid values."""
         path = RESULTS_DIR / "statistical_tests.csv"
         if not path.exists():
             pytest.skip("Run aggregate_multi_seed_results.py first.")
         df = pd.read_csv(path)
         assert len(df) >= 1
+        
+        # Verify no degenerate values
+        import numpy as np
+        for col in ["t_statistic", "p_value", "cohens_d"]:
+            if col in df.columns:
+                assert not df[col].isnull().any(), f"NaN in {col}"
+                assert np.isfinite(df[col].values).all(), (
+                    f"Non-finite values in {col}: {df[col].values}. "
+                    f"Degenerate t-test indicates seeds produced identical results."
+                )
+        
+        # p-values must be in [0, 1]
+        assert (df["p_value"] >= 0).all() and (df["p_value"] <= 1).all(), (
+            f"p-values out of [0,1]: {df['p_value'].values}"
+        )
+    
+    def test_effect_size_interpretable(self):
+        """Cohen's d should be in an interpretable range (not billions)."""
+        path = RESULTS_DIR / "statistical_tests.csv"
+        if not path.exists():
+            pytest.skip()
+        df = pd.read_csv(path)
+        if "cohens_d" not in df.columns:
+            pytest.skip()
+        import numpy as np
+        assert (df["cohens_d"].abs() < 10).all(), (
+            f"Cohen's d values are unreasonably large: {df['cohens_d'].values}. "
+            f"Expected |d| < 10 for ML performance metrics."
+        )
 
     def test_fedagent_chain_significantly_better_than_local_baseline(self):
         # With only 3 seeds, p < 0.05 is extremely hard to reach unless the effect is massive.

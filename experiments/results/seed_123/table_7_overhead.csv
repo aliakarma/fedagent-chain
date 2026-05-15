@@ -1,5 +1,5 @@
 Component,CPU Time,Notes
-Avg round duration (4 nodes),249.1s,Mean over all federated rounds
-Min round duration,147.1s,
-Max round duration,1453.4s,
-Total simulation time,4982.4s,(20 rounds x 4 nodes)
+Avg round duration (4 nodes),99.4s,Mean over all federated rounds
+Min round duration,89.0s,
+Max round duration,111.5s,
+Total simulation time,993.5s,(10 rounds x 4 nodes)

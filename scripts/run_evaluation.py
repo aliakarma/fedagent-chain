@@ -118,10 +118,18 @@ def _find_best_checkpoint(run_dir: Path) -> Path:
     best_round = best_round_data.get("round")
     
     candidate = ckpt_dir / f"global_model_round_{best_round:03d}.pt"
-    logger.info("Selected best checkpoint", round=best_round, f1=round(best_round_data.get("mean_f1", 0.0), 4), run_dir=run_dir.name)
-    return candidate
+    
+    if candidate.exists():
+        logger.info(
+            "Selected best checkpoint",
+            round=best_round,
+            f1=round(best_round_data.get("mean_f1", 0.0), 4),
+            run_dir=run_dir.name
+        )
+        return candidate
 
     # Fall back to the nearest saved checkpoint <= best_round
+    logger.warning("Best round checkpoint disappeared, falling back to nearest", best_round=best_round, run_dir=str(run_dir))
     saved = sorted(ckpt_dir.glob("global_model_round_*.pt"))
     saved_rounds = []
     for p in saved:
@@ -129,6 +137,7 @@ def _find_best_checkpoint(run_dir: Path) -> Path:
             saved_rounds.append((int(p.stem.split("_")[-1]), p))
         except ValueError:
             pass
+            
     below = [(r, p) for r, p in saved_rounds if r <= best_round]
     if below:
         rnd, path = max(below, key=lambda x: x[0])
