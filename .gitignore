@@ -96,3 +96,4 @@ blockchain_storage/
 *.tar.gz
 *.zip
 /verify
+FedAgent_Chain_Remediation_Plan.md

@@ -94,30 +94,16 @@ class FederatedClient:
     ) -> Tuple[Dict[str, np.ndarray], int, Dict[str, float]]:
         """Execute one federated learning round on local data.
 
-        This method:
-        1. Loads the global model weights
-        2. Trains locally for E epochs
-        3. Computes the update Δw_k = w_k - w_global
-        4. Applies DP protection: clip + Gaussian noise
-        5. Submits h_k^t = H(Δw̃_k || ID_k || t) to the blockchain
-        6. Returns the protected update and local evaluation metrics
-
-        Parameters
-        ----------
-        global_state : dict
-            Global model parameter dictionary from the aggregator.
-        round_number : int
-            Current federated learning round index.
-        seed : int, optional
-            Local training seed for reproducibility.
-
         Returns
         -------
         tuple of (protected_update, n_samples, metrics)
             - protected_update: Dict of DP-protected parameter updates
             - n_samples: Number of local training samples
-            - metrics: Dict with 'loss', 'accuracy', 'f1', fairness scores
+            - metrics: Dict with 'loss', 'accuracy', 'f1', fairness scores,
+                       'time_local_training', 'time_blockchain', 'model_size_bytes'
         """
+        import time
+        start_total = time.time()
         if seed is not None:
             set_global_seed(seed + round_number)
 
@@ -213,6 +199,8 @@ class FederatedClient:
             epoch_loss = float(np.mean(batch_losses))
             epoch_losses.append(epoch_loss)
 
+        time_training = time.time() - start_total
+
         final_state = model.get_state_dict_numpy()
 
         # Compute update delta: Δw_k = w_k^t - w_global^t
@@ -237,6 +225,8 @@ class FederatedClient:
 
         # Submit hash to blockchain (ONLY the hash of the PROTECTED DELTA)
         flat_protected_delta = np.concatenate([v.flatten() for v in protected_delta.values()])
+        
+        start_bc = time.time()
         self.blockchain.submit_model_update_hash(
             protected_update=flat_protected_delta,
             node_id=self.node_id,
@@ -244,10 +234,19 @@ class FederatedClient:
             consent_ref=self.consent_ref,
             policy_ref=self.policy_ref,
         )
+        time_blockchain = time.time() - start_bc
 
         # Evaluate local model
         metrics = self._evaluate_local(model)
         metrics["train_loss"] = float(np.mean(epoch_losses))
+        
+        # Systems overhead metrics
+        metrics["time_local_training"] = round(time_training, 4)
+        metrics["time_blockchain"] = round(time_blockchain, 4)
+        
+        # Model size calculation (approximate bytes of float32 weights)
+        model_size_bytes = sum(v.nbytes for v in protected_absolute_weights.values())
+        metrics["model_size_bytes"] = int(model_size_bytes)
 
         self.logger.info(
             "Local training round complete",
@@ -257,6 +256,7 @@ class FederatedClient:
             n_samples=len(self.train_dataset),
             train_loss=round(metrics["train_loss"], 4),
             f1=round(metrics.get("f1", 0.0), 4),
+            model_size_kb=round(model_size_bytes / 1024, 2),
         )
 
         return protected_absolute_weights, len(self.train_dataset), metrics

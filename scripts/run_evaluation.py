@@ -24,6 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 import pandas as pd
 import torch
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from torch.utils.data import DataLoader
 
 from src.data.dataset import EmploymentDataset
@@ -70,7 +72,7 @@ def find_run_dir(runs_dir: Path, experiment_name: str, seed: int | None = None) 
     """
     pattern = f"{experiment_name}_*"
     if seed is not None:
-        pattern = f"{experiment_name}_seed{seed}_*"
+        pattern = f"{experiment_name}_seed{seed}*"
     
     candidates = sorted(
         runs_dir.glob(pattern),
@@ -362,6 +364,43 @@ def generate_table_3(
     return df
 
 
+def generate_confusion_matrices(
+    models: dict[str, EmploymentMatchingModel],
+    seed: int,
+    results_dir: Path,
+    data_dir: Path,
+) -> None:
+    """Generate confusion matrix PDFs for the models."""
+    plots_dir = ensure_dir(results_dir / "plots")
+    
+    for method_name in ["FedAgent-Chain", "Standard FedAvg"]:
+        if method_name not in models:
+            continue
+            
+        model = models[method_name]
+        all_y_true = []
+        all_y_pred = []
+        
+        for i, node_id in enumerate(NODES):
+            y_true, y_pred, _, _ = evaluate_model_on_node(
+                model, node_id, seed + i * 1000, data_dir
+            )
+            all_y_true.extend(y_true.tolist())
+            all_y_pred.extend(y_pred.tolist())
+            
+        cm = confusion_matrix(all_y_true, all_y_pred)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Unsuitable", "Suitable"])
+        
+        fig, ax = plt.subplots(figsize=(6, 5))
+        disp.plot(cmap="Blues", ax=ax, values_format="d")
+        ax.set_title(f"Confusion Matrix: {method_name}")
+        
+        safe_name = method_name.lower().replace("-", "_").replace(" ", "_")
+        plt.savefig(plots_dir / f"confusion_matrix_{safe_name}.pdf", bbox_inches="tight")
+        plt.close()
+        logger.info(f"Confusion matrix saved for {method_name}")
+
+
 def generate_table_4_blockchain(run_dir: Path, results_dir: Path) -> pd.DataFrame:
     """Table 4: Read blockchain metrics from the simulation audit log."""
     audit_path = run_dir / "blockchain_logs" / "audit_trail.json"
@@ -573,7 +612,7 @@ def main() -> None:
     data_dir    = Path(args.data_dir)
 
     if args.seed_subdir:
-        results_dir = ensure_dir(Path(args.results_dir) / f"seed_{args.seed}")
+        results_dir = ensure_dir(Path(args.results_dir) / "seeds" / f"seed_{args.seed}")
     else:
         results_dir = ensure_dir(Path(args.results_dir))
 
@@ -635,6 +674,9 @@ def main() -> None:
 
     logger.info("Generating Table 5 (agentic AI services)...")
     t5 = generate_table_5_agents(args.seed, results_dir)
+
+    logger.info("Generating Confusion Matrices...")
+    generate_confusion_matrices(models, args.seed, results_dir, data_dir)
 
     # ── Summary ────────────────────────────────────────────────────────────────
     print(f"\n{'='*65}")

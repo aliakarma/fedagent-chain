@@ -1,0 +1,5 @@
+Attribute,FedAgent-Chain_mean,FedAgent-Chain_std,Standard FedAvg_mean,Standard FedAvg_std,Local Baseline_mean,Local Baseline_std,Centralized_mean,Centralized_std
+Disability Category,0.0517,0.0147,0.0428,0.0095,0.0764,0.0546,0.0444,0.0193
+Language Group,0.4154,0.0493,0.4115,0.0532,0.3248,0.143,0.4366,0.0843
+Work Mode,0.0145,0.0083,0.0169,0.0233,0.0243,0.0273,0.0111,0.0071
+Regional Node,0.1795,0.016,0.1729,0.0205,0.1357,0.079,0.1764,0.0253

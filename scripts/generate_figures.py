@@ -47,10 +47,14 @@ def parse_args() -> argparse.Namespace:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def find_run_dir(runs_dir: Path, experiment_name: str) -> Path | None:
-    """Return the most recent run directory matching experiment_name prefix."""
+def find_run_dir(runs_dir: Path, experiment_name: str, seed: int | None = None) -> Path | None:
+    """Return the most recent run directory matching experiment_name and optionally seed."""
+    pattern = f"{experiment_name}_*"
+    if seed is not None:
+        pattern = f"{experiment_name}_seed{seed}_*"
+    
     candidates = sorted(
-        runs_dir.glob(f"{experiment_name}_*"),
+        runs_dir.glob(pattern),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -98,65 +102,103 @@ def main() -> None:
     args = parse_args()
     setup_logging(format="console")
 
-    output_dir  = ensure_dir(Path(args.output_dir))
-    runs_dir    = Path(args.runs_dir)
     results_dir = Path(args.results_dir)
+    plots_dir   = ensure_dir(results_dir / "plots")
+    runs_dir    = Path(args.runs_dir)
 
-    logger.info("Generating paper figures", output_dir=str(output_dir))
-
-    # Locate run directories
-    fedavg_run_dir   = find_run_dir(runs_dir, "ablation_no_fairness")
-    fairness_run_dir = find_run_dir(runs_dir, "fedagent_chain_full")
-    local_run_dir    = find_run_dir(runs_dir, "baseline_local")
-    central_run_dir  = find_run_dir(runs_dir, "baseline_centralized")
-
-    missing_dirs = []
-    if fedavg_run_dir is None:
-        missing_dirs.append("ablation_no_fairness")
-    if fairness_run_dir is None:
-        missing_dirs.append("fedagent_chain_full")
-
-    if missing_dirs:
-        logger.error(
-            "Required run directories not found — run simulations first",
-            missing=missing_dirs,
-        )
+    # ── Seed discovery ───────────────────────────────────────────────────────
+    seed_dirs = sorted((results_dir / "seeds").glob("seed_*"))
+    if not seed_dirs:
+        seed_dirs = sorted(results_dir.glob("seed_*")) # Fallback
+        
+    seeds = [int(d.name.split("_")[1]) for d in seed_dirs]
+    if not seeds:
+        logger.error("No multi-seed results found in experiments/results/")
         sys.exit(1)
+        
+    logger.info("Generating paper figures from seeds", seeds=seeds, output_dir=str(plots_dir))
+
+    # ── Aggregate Histories for Figure 3 ──────────────────────────────────────
+    def load_aggregated_history(exp_prefix: str) -> list[dict]:
+        all_histories = []
+        for seed in seeds:
+            # find_run_dir needs to be seed-specific here if we want to be exact
+            # but generate_figures.py's find_run_dir is currently prefix-only.
+            # Let's refine find_run_dir to handle seeds.
+            run_dir = find_run_dir(runs_dir, exp_prefix, seed)
+            if run_dir:
+                all_histories.append(load_convergence_history(run_dir))
+        
+        if not all_histories:
+            return []
+            
+        # Aggregate rounds (assuming same number of rounds for simplicity)
+        n_rounds = min(len(h) for h in all_histories)
+        agg_history = []
+        for r in range(n_rounds):
+            round_data = {"round": r + 1}
+            f1_vals = [h[r].get("mean_f1", 0.0) for h in all_histories]
+            round_data["mean_f1"] = np.mean(f1_vals)
+            round_data["std_f1"]  = np.std(f1_vals)
+            agg_history.append(round_data)
+        return agg_history
 
     # ── Figure 3: FL Convergence Curves ───────────────────────────────────────
-    logger.info("Loading convergence histories for Figure 3...")
-    fedavg_history   = load_convergence_history(fedavg_run_dir)
-    fairness_history = load_convergence_history(fairness_run_dir)
+    logger.info("Aggregating convergence histories for Figure 3...")
+    fedavg_agg   = load_aggregated_history("ablation_no_fairness")
+    fairness_agg = load_aggregated_history("fedagent_chain_full")
 
-    plot_multi_convergence(
-        histories={
-            "Standard FedAvg":                 fedavg_history,
-            "FedAgent-Chain (Fairness-Aware)": fairness_history,
-        },
-        metric="mean_f1",
-        title="Figure 3: Federated Learning Convergence",
-        ylabel="Mean F1 Score (held-out test set)",
-        output_path=output_dir / "fl_convergence.pdf",
-    )
-    logger.info("Figure 3 saved: fl_convergence.pdf")
+    if fedavg_agg and fairness_agg:
+        plot_multi_convergence(
+            histories={
+                "Standard FedAvg":                 fedavg_agg,
+                "FedAgent-Chain (Fairness-Aware)": fairness_agg,
+            },
+            metric="mean_f1",
+            title="Figure 3: Federated Learning Convergence",
+            ylabel="Mean F1 Score (held-out test set)",
+            output_path=plots_dir / "fl_convergence.pdf",
+        )
+        logger.info("Figure 3 saved: fl_convergence.pdf")
 
     # ── Figure 4: Per-Node F1 Scores ──────────────────────────────────────────
-    logger.info("Extracting per-node metrics for Figure 4...")
-    node_metrics_computed = {
-        "Local Baseline":  extract_final_node_metrics(local_run_dir),
-        "Centralized":     extract_final_node_metrics(central_run_dir),
-        "Standard FL":     extract_final_node_metrics(fedavg_run_dir),
-        "FedAgent-Chain":  extract_final_node_metrics(fairness_run_dir),
-    }
-    # Drop empty entries
-    node_metrics_computed = {k: v for k, v in node_metrics_computed.items() if v}
+    logger.info("Extracting per-node metrics across seeds for Figure 4...")
+    
+    def get_node_metrics_agg(exp_prefix: str) -> tuple[dict, dict]:
+        node_vals = {} # node -> [seeds]
+        for seed in seeds:
+            run_dir = find_run_dir(runs_dir, exp_prefix, seed)
+            if run_dir:
+                metrics = extract_final_node_metrics(run_dir)
+                for node, val in metrics.items():
+                    node_vals.setdefault(node, []).append(val)
+        
+        means = {node: np.mean(vals) for node, vals in node_vals.items()}
+        stds  = {node: np.std(vals) for node, vals in node_vals.items()}
+        return means, stds
 
-    if node_metrics_computed:
+    methods = {
+        "Local Baseline":  "baseline_local",
+        "Centralized":     "baseline_centralized",
+        "Standard FL":     "ablation_no_fairness",
+        "FedAgent-Chain":  "fedagent_chain_full",
+    }
+    
+    node_means = {}
+    node_stds  = {}
+    for label, prefix in methods.items():
+        m, s = get_node_metrics_agg(prefix)
+        if m:
+            node_means[label] = m
+            node_stds[label]  = s
+
+    if node_means:
         plot_node_performance(
-            node_metrics=node_metrics_computed,
+            node_metrics=node_means,
+            node_stds=node_stds,
             metric="F1",
             title="Figure 4: Per-Node F1 Score (held-out test set)",
-            output_path=output_dir / "node_f1_scores.pdf",
+            output_path=plots_dir / "node_f1_scores.pdf",
         )
         logger.info("Figure 4 saved: node_f1_scores.pdf")
     else:
@@ -220,12 +262,12 @@ def main() -> None:
     y_max = max(max(v for v in standard_fl if isinstance(v, float) and not np.isnan(v)), 0.01)
     ax.set_ylim(0.0, y_max * 1.3)
     plt.tight_layout()
-    fig.savefig(output_dir / "fairness_disparity.pdf", dpi=300, bbox_inches="tight")
+    fig.savefig(plots_dir / "fairness_disparity.pdf", dpi=300, bbox_inches="tight")
     plt.close(fig)
     logger.info("Figure 5 saved: fairness_disparity.pdf")
 
     print(f"\n{'='*60}")
-    print(f" [OK] All paper figures saved to: {output_dir}")
+    print(f" [OK] All paper figures saved to: {plots_dir}")
     print("  - fl_convergence.pdf      (Figure 3)")
     print("  - node_f1_scores.pdf      (Figure 4)")
     print("  - fairness_disparity.pdf  (Figure 5)")

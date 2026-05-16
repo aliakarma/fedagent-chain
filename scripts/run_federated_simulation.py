@@ -313,17 +313,18 @@ def run_simulation_from_config(
             output_dir=str(output_dir),
         )
 
-        print(f"\n{'='*60}")
+        print("\n" + "="*60)
         print(f" [OK] Simulation complete: {run_name}")
-        print(f"{'='*60}")
+        print("="*60)
         print(f"  Best F1        : {results.get('best_f1', 0.0):.4f} (round {results.get('best_f1_round', 0)})")
         print(f"  Total rounds   : {results.get('convergence_rounds', 0)}")
         print(f"  Duration       : {total_duration:.1f}s")
+        print(f"  Comm. Volume   : {results.get('total_communication_volume_mb', 0.0):.2f} MB")
         print(f"  Results saved  : {output_dir}")
         if blockchain_enabled:
             print(f"  Blockchain records: {blockchain.get_record_count()}")
             print(f"  Hash completeness : {blockchain.get_hash_completeness():.1%}")
-        print(f"{'='*60}\n")
+        print("="*60 + "\n")
 
     finally:
         if use_mlflow:

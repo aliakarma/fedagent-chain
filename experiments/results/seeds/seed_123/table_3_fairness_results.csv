@@ -1,0 +1,5 @@
+Attribute,FedAgent-Chain,Standard FedAvg,Local Baseline,Centralized,Reduction
+Disability Category,0.0396,0.0346,0.0514,0.0541,-14.5%
+Language Group,0.4206,0.4199,0.123,0.5032,-0.2%
+Work Mode,0.0104,0.0077,0.0701,0.014,-35.1%
+Regional Node,0.1718,0.1746,0.0179,0.1764,1.6%

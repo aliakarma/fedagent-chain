@@ -1,0 +1,38 @@
+# FedAgent-Chain Experiment Manifest
+version: "1.0"
+provenance:
+  framework: FedAgent-Chain
+  repo: "aliakarma/fedagent-chain"
+  git_commit: "auto-generated"
+
+experimental_setup:
+  seeds: [42, 123, 2024, 777, 999]
+  n_rounds: 20
+  local_epochs: 3
+  learning_rate: 0.001
+  batch_size: 64
+
+nodes:
+  - saudi_arabia
+  - united_states
+  - china
+  - europe
+
+privacy_settings:
+  dp_enabled: true
+  clipping_threshold: 1.0
+  noise_multiplier: 0.1
+
+fairness_settings:
+  lambda_fairness: 0.5
+  sensitive_attribute: disability_category
+
+hardware_requirements:
+  min_ram: 8GB
+  recommended_ram: 16GB
+  cpu_cores: 4+
+  gpu: Optional (CPU-only training supported)
+
+reproducibility_check:
+  checksum_method: "SHA-256"
+  artifact_directory: "experiments/results/"

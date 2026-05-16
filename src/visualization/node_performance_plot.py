@@ -13,6 +13,7 @@ from src.visualization.styles import apply_fedagent_style, FIGSIZE_DOUBLE, NODE_
 
 def plot_node_performance(
     node_metrics: Dict[str, Dict[str, float]],
+    node_stds: Optional[Dict[str, Dict[str, float]]] = None,
     metric: str = "f1",
     title: str = "Per-Node F1 Score by Experimental Setting",
     output_path: Optional[str | Path] = None,
@@ -28,6 +29,9 @@ def plot_node_performance(
     node_metrics : dict
         Mapping: experiment_name → {node_id → metric_value}.
         Example: {"Standard FL": {"saudi_arabia": 0.82, "united_states": 0.85, ...}}
+    node_stds : dict, optional
+        Mapping: experiment_name → {node_id → std_value}.
+        If provided, error bars are drawn.
     metric : str
         Metric name for the y-axis label.
     title : str
@@ -55,9 +59,12 @@ def plot_node_performance(
 
     for i, exp_name in enumerate(experiment_names):
         values = [node_metrics[exp_name].get(node, 0.0) for node in nodes]
+        stds   = [node_stds[exp_name].get(node, 0.0) for node in nodes] if node_stds and exp_name in node_stds else None
+        
         offset = (i - n_experiments / 2 + 0.5) * bar_width
         bars = ax.bar(
             x + offset, values, width=bar_width, label=exp_name,
+            yerr=stds, capsize=3, error_kw={"elinewidth": 1, "ecolor": "black"},
             alpha=0.85, edgecolor="white", linewidth=0.5,
         )
         for bar, val in zip(bars, values):

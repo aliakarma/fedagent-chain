@@ -31,8 +31,9 @@ logger = get_logger("aggregate_multi_seed")
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
-    p.add_argument("--seeds",       nargs="+", type=int, default=[42, 123, 2024])
+    p.add_argument("--seeds",       nargs="+", type=int, default=[42, 123, 2024, 777, 999])
     p.add_argument("--results-dir", type=str,  default="experiments/results/")
+    p.add_argument("--stats-dir",   type=str,  default="experiments/results/statistics/")
     return p.parse_args()
 
 
@@ -118,27 +119,44 @@ def run_statistical_tests(
 def main() -> None:
     args = parse_args()
     setup_logging(format="console")
-    results_dir = ensure_dir(Path(args.results_dir))
+    
+    results_dir = Path(args.results_dir)
+    stats_dir   = ensure_dir(Path(args.stats_dir))
+    
+    # ── Seed discovery ───────────────────────────────────────────────────────
+    # If seeds are explicitly provided, use them. Otherwise, find all seed_* dirs.
     seeds = args.seeds
+    seed_dirs = sorted(results_dir.glob("seed_*"))
+    if not args.seeds and seed_dirs:
+        seeds = [int(d.name.split("_")[1]) for d in seed_dirs]
+        logger.info("Discovered seeds from directory structure", seeds=seeds)
 
     # ── Load Table 2 per seed ────────────────────────────────────────────────
     per_seed: dict[int, pd.DataFrame] = {}
     for seed in seeds:
-        seed_dir = results_dir / f"seed_{seed}"
-        t2_path  = seed_dir / "table_2_model_performance.csv"
-        if not t2_path.exists():
-            # Fallback for missing seed-subdir (checking if it's in the main dir)
-            t2_path = results_dir / "table_2_model_performance.csv"
-        if not t2_path.exists():
-            logger.warning("Table 2 not found for seed", seed=seed, path=str(t2_path))
+        # Check both the old seed_subdir and the new seeds/seed_subdir
+        candidates = [
+            results_dir / f"seed_{seed}" / "table_2_model_performance.csv",
+            results_dir / "seeds" / f"seed_{seed}" / "table_2_model_performance.csv",
+            results_dir / "table_2_model_performance.csv" # Fallback
+        ]
+        
+        t2_path = None
+        for cand in candidates:
+            if cand.exists():
+                t2_path = cand
+                break
+        
+        if t2_path:
+            per_seed[seed] = pd.read_csv(t2_path)
+        else:
+            logger.warning("Table 2 not found for seed", seed=seed)
             continue
-        per_seed[seed] = pd.read_csv(t2_path)
 
     if len(per_seed) < 2:
         logger.error(
             "Need results for at least 2 seeds. "
-            "Run run_evaluation.py for each seed first, "
-            "saving to experiments/results/seed_{seed}/ subdirectories."
+            "Run run_evaluation.py for each seed first."
         )
         return
 
@@ -187,7 +205,7 @@ def main() -> None:
         summary_rows.append(row)
         
     summary_df = pd.DataFrame(summary_rows)
-    summary_df.to_csv(results_dir / "table_2_multi_seed_summary.csv", index=False)
+    summary_df.to_csv(stats_dir / "table_2_multi_seed_summary.csv", index=False)
 
     print("\n=== Multi-Seed F1 Summary (with 95% CI) ===")
     print(summary_df.to_string(index=False))
@@ -196,47 +214,87 @@ def main() -> None:
     fedagent_key = next((k for k in f1_by_method if "FedAgent" in k), None)
     if fedagent_key is None:
         logger.warning("FedAgent-Chain results not found in summary table")
-        return
-
-    test_rows = []
-    for method in methods:
-        if method == fedagent_key:
-            continue
-        if len(f1_by_method[method]) < 2:
-            continue
-        # Ensure we have the same seeds for both methods
-        if len(f1_by_method[fedagent_key]) != len(f1_by_method[method]):
-            logger.warning(
-                "Skipping comparison due to seed count mismatch",
-                method=method,
-                fedagent_n=len(f1_by_method[fedagent_key]),
-                method_n=len(f1_by_method[method])
+    else:
+        test_rows = []
+        for method in methods:
+            if method == fedagent_key:
+                continue
+            if len(f1_by_method[method]) < 2:
+                continue
+            # Ensure we have the same seeds for both methods
+            if len(f1_by_method[fedagent_key]) != len(f1_by_method[method]):
+                logger.warning(
+                    "Skipping comparison due to seed count mismatch",
+                    method=method,
+                    fedagent_n=len(f1_by_method[fedagent_key]),
+                    method_n=len(f1_by_method[method])
+                )
+                continue
+                
+            result = run_statistical_tests(
+                f1_by_method[fedagent_key],
+                f1_by_method[method],
+                fedagent_key, method,
             )
+            if result is not None:
+                test_rows.append(result)
+
+        if test_rows:
+            tests_df = pd.DataFrame(test_rows)
+            tests_df.to_csv(stats_dir / "statistical_tests.csv", index=False)
+
+            print("\n=== Statistical Tests (paired t-test) ===")
+            print(tests_df.to_string(index=False))
+            print(
+                "\n  Significance threshold: p < 0.05  |  "
+                "Strong effect: |d| > 0.80  |  "
+                "Medium: |d| > 0.50"
+            )
+        else:
+            print("\n[!] No statistical tests performed (insufficient multi-seed data)")
+
+    # ── Aggregate Table 3: Fairness Results ──────────────────────────────────
+    logger.info("Aggregating Table 3 (Fairness Disparity) across seeds...")
+    fairness_by_attr_method: dict[str, dict[str, list[float]]] = {}
+    
+    for seed, df in per_seed.items():
+        # Load Table 3 for this seed
+        candidates = [
+            results_dir / f"seed_{seed}" / "table_3_fairness_results.csv",
+            results_dir / "seeds" / f"seed_{seed}" / "table_3_fairness_results.csv",
+        ]
+        t3_path = next((c for c in candidates if c.exists()), None)
+        if not t3_path:
             continue
             
-        result = run_statistical_tests(
-            f1_by_method[fedagent_key],
-            f1_by_method[method],
-            fedagent_key, method,
-        )
-        if result is not None:
-            test_rows.append(result)
+        t3_df = pd.read_csv(t3_path)
+        for _, row in t3_df.iterrows():
+            attr = str(row["Attribute"])
+            if attr not in fairness_by_attr_method:
+                fairness_by_attr_method[attr] = {m: [] for m in methods}
+            
+            for method in methods:
+                if method in t3_df.columns:
+                    val = row[method]
+                    # Reduction column might exist, ignore it
+                    if method != "Reduction" and pd.notna(val):
+                        fairness_by_attr_method[attr][method].append(float(val))
 
-    if test_rows:
-        tests_df = pd.DataFrame(test_rows)
-        tests_df.to_csv(results_dir / "statistical_tests.csv", index=False)
+    if fairness_by_attr_method:
+        fairness_summary_rows = []
+        for attr, method_vals in fairness_by_attr_method.items():
+            s_row: dict = {"Attribute": attr}
+            for method, vals in method_vals.items():
+                if vals:
+                    s_row[f"{method}_mean"] = round(float(np.mean(vals)), 4)
+                    s_row[f"{method}_std"] = round(float(np.std(vals, ddof=1)), 4) if len(vals) > 1 else 0.0
+            fairness_summary_rows.append(s_row)
+            
+        fairness_summary_df = pd.DataFrame(fairness_summary_rows)
+        fairness_summary_df.to_csv(stats_dir / "table_3_multi_seed_summary.csv", index=False)
+        logger.info("Table 3 multi-seed summary saved")
 
-        print("\n=== Statistical Tests (paired t-test) ===")
-        print(tests_df.to_string(index=False))
-        print(
-            "\n  Significance threshold: p < 0.05  |  "
-            "Strong effect: |d| > 0.80  |  "
-            "Medium: |d| > 0.50"
-        )
-    else:
-        print("\n[!] No statistical tests performed (insufficient multi-seed data)")
-
-    print(f"\n[OK] Statistical analysis saved to: {results_dir}")
+    print(f"\n[OK] Statistical analysis saved to: {stats_dir}")
 
 
 if __name__ == "__main__":
