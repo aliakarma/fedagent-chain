@@ -1,0 +1,5 @@
+Node,Total Samples,Suitable (1),Unsuitable (0),Balance (%)
+saudi_arabia,12500,6753,5747,54.0%
+united_states,12500,7265,5235,58.1%
+china,12500,7601,4899,60.8%
+europe,12500,4759,7741,38.1%
