@@ -201,10 +201,12 @@ class FederatedServer:
             fairness_scores[client.node_id] = metrics.get("min_group_f1", 0.5)
 
         # Phase 2: Fairness-aware aggregation
+        start_agg = time.time()
         if self.use_fairness and isinstance(self.aggregator, FairnessAwareFedAvgAggregator):
             aggregated_weights = self.aggregator.aggregate(updates, fairness_scores)
         else:
             aggregated_weights = self.aggregator.aggregate(updates)
+        time_aggregation = time.time() - start_agg
 
         # Phase 3: Update global model state (absolute weights)
         for name in self.global_state:
@@ -240,6 +242,22 @@ class FederatedServer:
             nid: {k: round(v, 4) for k, v in m.items() if isinstance(v, float)}
             for nid, m in node_metrics.items()
         }
+
+        # Systems overhead metrics
+        round_summary["time_aggregation"] = round(time_aggregation, 4)
+        
+        # Communication overhead (bytes from nodes to server)
+        round_bytes = sum(m.get("model_size_bytes", 0) for m in node_metrics.values())
+        # Bytes from server back to nodes (global model broadcast)
+        model_size = sum(v.nbytes for v in self.global_state.values())
+        round_bytes += model_size * len(clients)
+        
+        round_summary["bytes_transmitted"] = int(round_bytes)
+        round_summary["model_size_kb"] = round(model_size / 1024, 2)
+
+        # Average training time across nodes
+        train_times = [m.get("time_local_training", 0.0) for m in node_metrics.values()]
+        round_summary["mean_time_local_training"] = float(np.mean(train_times))
 
         # Loss explosion detection
         mean_loss = round_summary.get("mean_train_loss", 0.0)
@@ -284,9 +302,12 @@ class FederatedServer:
         final = self.round_history[-1]
         best_f1_round = max(self.round_history, key=lambda r: r.get("mean_f1", 0.0))
 
+        total_bytes = sum(r.get("bytes_transmitted", 0) for r in self.round_history)
+        
         return {
             "final_round_metrics": final,
             "best_f1": best_f1_round.get("mean_f1", 0.0),
             "best_f1_round": best_f1_round.get("round", 0),
             "convergence_rounds": len(self.round_history),
+            "total_communication_volume_mb": round(total_bytes / (1024 * 1024), 2),
         }

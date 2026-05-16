@@ -1,0 +1,5 @@
+Metric,Value
+Avg Local Training Time,16.01s
+Avg Aggregation Time,0.0005s
+Avg Blockchain Logging Time,0.0007s
+Model Size (KB),513.0 KB

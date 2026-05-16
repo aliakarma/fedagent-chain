@@ -192,12 +192,35 @@ Lower values indicate more equitable performance across sub-groups. **Reduction*
 | Governance | High-Risk Detection Rate | 0.733 |
 | Governance | False Positive Rate | 0.060 |
 
-### Table 7 — System Overhead
+### Table 7 — Systems Overhead
 
-| Component | Time | Notes |
-|:---|:---:|:---|
-| Avg round duration | 86.6 s | Mean across all FL rounds (4 nodes, 3 local epochs) |
-| Total simulation | 866.4 s | 10 rounds × 4 nodes |
+| Metric | Value | Description |
+|:---|:---|:---|
+| Avg Local Training Time | 16.0s | Per-node computation time (5 epochs) |
+| Avg Aggregation Time | 0.0005s | Server-side coordination overhead |
+| Avg Blockchain Logging Time | 0.001s | Hash submission latency |
+| Model Size (KB) | 513 KB | Payload size per communication round |
+
+### Scalability Discussion
+
+The FedAgent-Chain architecture is designed for linear communication scalability:
+1.  **Communication**: Total volume scales as $O(R \cdot K \cdot |W|)$, where $R$ is rounds, $K$ is nodes, and $|W|$ is model size. With a ~500KB model, a 100-node network would transmit ~100MB per round, well within modern institutional bandwidth.
+2.  **Computation**: Local training is parallelized across nodes. Server-side aggregation is $O(K \cdot |W|)$, which is negligible for $K < 1000$.
+3.  **Blockchain**: The audit trail grows linearly with $R \cdot K$. In production, a Merkle-tree based accumulator could further compress these logs.
+
+---
+
+## 🛠️ Advanced Workflows
+
+### Performance Profiling
+
+To regenerate systems overhead plots and CSVs:
+
+```bash
+python scripts/generate_system_overhead_plots.py
+```
+
+Outputs will be saved to `experiments/results/plots/runtime_breakdown.pdf`.
 
 ### Statistical Significance (Paired t-test, n=5 seeds)
 
