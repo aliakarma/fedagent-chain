@@ -107,13 +107,14 @@ run-ablations:
 
 run-evaluation:
 	python scripts/run_evaluation.py \
-		--config configs/evaluation/metrics.yaml \
-		--results-dir experiments/results/
+		--runs-dir experiments/runs/ \
+		--results-dir experiments/results/ \
+		--data-dir data/synthetic --seed 42 --seed-subdir
 
 generate-figures:
 	python scripts/generate_figures.py \
 		--results-dir experiments/results/ \
-		--output-dir experiments/figures/
+		--runs-dir experiments/runs/
 
 generate-tables:
 	python scripts/generate_tables.py \

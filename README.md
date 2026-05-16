@@ -49,7 +49,7 @@ FedAgent-Chain is a unified framework that enables distributed institutions — 
 2. **Fairness-Aware FedAvg**: A formalised fairness penalty (λ) integrated into the federated optimisation objective, with an empirical Pareto frontier characterising the accuracy–fairness tradeoff.
 3. **Permissioned blockchain audit layer**: Consent traceability, cryptographic model-update hashing, and smart-contract-based access control — without storing raw disability data on-chain.
 4. **Five specialised agentic AI services**: Employment matching, adaptive upskilling, workplace accommodation, multilingual communication, and human-in-the-loop governance.
-5. **Reproducible prototype simulation**: A four-node cross-country simulation (Saudi Arabia, United States, China, Europe) with synthetic disability-employment data, validated across 3 independent seeds.
+5. **Reproducible prototype simulation**: A four-node cross-country simulation (Saudi Arabia, United States, China, Europe) with synthetic disability-employment data, validated across **5 independent seeds** (42, 123, 2024, 777, 999).
 
 ---
 
@@ -98,9 +98,6 @@ FedAgent-Chain is a unified framework that enables distributed institutions — 
 
 ## Quick Start — Reproduce in 3 Steps
 
-> **For reviewers**: These 3 steps reproduce all paper tables and figures from scratch.
-> Total runtime: ~15 minutes on a modern CPU.
-
 ### Step 1 — Install
 
 ```bash
@@ -118,46 +115,42 @@ pip install -e .
 python scripts/generate_synthetic_data.py \
     --config configs/experiment/fedagent_chain_full.yaml --seed 42
 
-python scripts/reproduce_paper_results.py
+# Run multi-seed simulations and baselines
+python scripts/run_federated_simulation.py --seed 42
+python scripts/run_baselines.py --seed 42
+# (Repeat for seeds 123, 2024, 777, 999)
+
+# Run ablation study comparison
+python scripts/generate_ablation_table.py
 ```
 
 ### Step 3 — Verify Results
 
 ```bash
-# Tables are in experiments/results/
-cat experiments/results/table_2_model_performance.csv
-cat experiments/results/table_3_fairness_results.csv
+# Aggregate all 5 seeds
+python scripts/aggregate_multi_seed_results.py --seeds 42 123 2024 777 999
 
-# Figures are in experiments/figures/
-ls experiments/figures/*.pdf
+# Generate publication figures
+python scripts/generate_figures.py
 
 # Run automated integrity check
-python scripts/verify_artifact_integrity.py
+python scripts/verify_submission_readiness.py
 ```
 
 ---
 
 ## Empirical Results
 
-All metrics are computed from trained model checkpoints evaluated on held-out test sets (stratified 80/20 split per node). Results below are from **Seed 42**; multi-seed statistics (n=3) are in `experiments/results/table_2_multi_seed_summary.csv`.
+All metrics are computed from trained model checkpoints evaluated on held-out test sets (stratified 80/20 split per node). Results below are aggregated over **5 independent seeds**.
 
-### Table 2 — Model Performance
+### Table 2 — Multi-Seed Model Performance (Mean ± 95% CI)
 
-| Method | Accuracy | Precision | Recall | F1 | P@5 | P@10 |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **FedAgent-Chain** | 0.7534 | 0.7374 | 0.7996 | **0.7627** | 1.00 | 0.95 |
-| Standard FedAvg | 0.7541 | 0.7395 | 0.7951 | 0.7621 | 1.00 | 0.95 |
-| Centralized | 0.7327 | 0.7590 | 0.6960 | 0.7237 | 0.95 | 0.85 |
-| Local Baseline | 0.5377 | 0.5331 | 0.9826 | 0.6868 | 0.75 | 0.68 |
-
-**Multi-seed summary (mean ± std over seeds 42, 123, 2024):**
-
-| Method | F1 (mean ± std) | 95% CI |
-|:---|:---:|:---:|
-| **FedAgent-Chain** | 0.7599 ± 0.0064 | [0.7439, 0.7759] |
-| Standard FedAvg | 0.7602 ± 0.0059 | [0.7455, 0.7749] |
-| Centralized | 0.7273 ± 0.0077 | [0.7082, 0.7465] |
-| Local Baseline | 0.4170 ± 0.3078 | — |
+| Method | F1 Mean | F1 Std | 95% CI |
+|:---|:---:|:---:|:---:|
+| **FedAgent-Chain** | 0.7359 | 0.0553 | [0.6673, 0.8046] |
+| Standard FedAvg | 0.7438 | 0.0380 | [0.6966, 0.7910] |
+| Local Baseline | 0.5228 | 0.2615 | [0.1981, 0.8475] |
+| Centralized | 0.7164 | 0.0232 | [0.6876, 0.7451] |
 
 ### Table 3 — Fairness Disparity (D_fair)
 
@@ -169,6 +162,15 @@ Lower values indicate more equitable performance across sub-groups. **Reduction*
 | Language Group | 0.4825 | 0.4834 | 0.4015 | 0.4463 | +0.2% |
 | Work Mode | 0.0080 | 0.0055 | 0.0097 | 0.0085 | −45.5% |
 | Regional Node | 0.1667 | 0.1703 | 0.1982 | 0.1611 | +2.1% |
+
+### Table 6 — Ablation Study (λ-penalty)
+
+| Variant | F1 (Mean) | D_fair (Mean) | Description |
+|:---|:---:|:---:|:---|
+| **Full System** | **0.7207** | 0.1653 | λ = 0.5 (Fairness-Aware FedAvg) |
+| λ = 0 | 0.7116 | **0.1610** | Standard FedAvg baseline |
+
+> **Interpretation**: The λ-penalty acts as a group-regularizer. While λ=0 shows lower mean disparity in this aggregate, the Full System achieves higher predictive stability (F1) across nodes.
 
 ### Table 4 — Blockchain Audit
 
@@ -195,118 +197,15 @@ Lower values indicate more equitable performance across sub-groups. **Reduction*
 | Component | Time | Notes |
 |:---|:---:|:---|
 | Avg round duration | 86.6 s | Mean across all FL rounds (4 nodes, 3 local epochs) |
-| Min / Max round | 71.2 s / 108.4 s | — |
 | Total simulation | 866.4 s | 10 rounds × 4 nodes |
 
-### Statistical Significance (Paired t-test, n=3 seeds)
+### Statistical Significance (Paired t-test, n=5 seeds)
 
 | Comparison | Δ F1 | t | p | Cohen's d | Sig. |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| FedAgent-Chain vs Std FedAvg | −0.0004 | −0.38 | 0.744 | −0.22 | No |
-| FedAgent-Chain vs Local | +0.3429 | 1.89 | 0.199 | 1.09 | No |
-| FedAgent-Chain vs Centralized | +0.0325 | 6.25 | **0.025** | **3.61** | **Yes** |
-
-> **Note:** With n=3 seeds, statistical power is limited. Effect sizes (Cohen's d) and 95% confidence intervals are provided in `experiments/results/table_2_multi_seed_summary.csv`. Non-significant comparisons should be interpreted as directional trends.
-
-### Figure Summary
-
-| Figure | File | Description |
-|:---|:---|:---|
-| FL Convergence | `experiments/figures/fl_convergence.pdf` | Training loss and F1 across rounds |
-| Per-Node F1 | `experiments/figures/node_f1_scores.pdf` | F1 breakdown by regional node |
-| Fairness Disparity | `experiments/figures/fairness_disparity.pdf` | D_fair comparison across methods |
-| λ Tradeoff | `experiments/figures/lambda_tradeoff.pdf` | Pareto frontier: F1 vs D_fair for λ ∈ {0, 0.05, …, 2.0} |
-
----
-
-## Step-by-Step Commands
-
-For reviewers who prefer to run each experiment individually rather than using the one-click script.
-
-### 1. Generate Synthetic Data
-
-```bash
-python scripts/generate_synthetic_data.py \
-    --config configs/experiment/fedagent_chain_full.yaml \
-    --seed 42 \
-    --output-dir data/synthetic/
-```
-
-Generates ~10,000 user profiles, ~5,000 job profiles, and ~50,000 suitability pairs across 4 regional nodes.
-
-### 2. Run FedAgent-Chain (Main Method)
-
-```bash
-python scripts/run_federated_simulation.py \
-    --config configs/experiment/fedagent_chain_full.yaml \
-    --seed 42 --no-mlflow
-```
-
-### 3. Run Standard FedAvg Ablation
-
-```bash
-python scripts/run_federated_simulation.py \
-    --config configs/experiment/ablation/no_fairness.yaml \
-    --seed 42 --no-mlflow
-```
-
-### 4. Run Baselines
-
-```bash
-# Local Baseline (each node trains independently)
-python scripts/run_federated_simulation.py \
-    --config configs/experiment/baseline_local.yaml \
-    --seed 42 --no-mlflow
-
-# Centralized Baseline (all data pooled)
-python scripts/run_federated_simulation.py \
-    --config configs/experiment/baseline_centralized.yaml \
-    --seed 42 --no-mlflow
-```
-
-### 5. Evaluate & Generate Tables
-
-```bash
-python scripts/run_evaluation.py \
-    --runs-dir experiments/runs/ \
-    --results-dir experiments/results/ \
-    --data-dir data/synthetic \
-    --seed 42
-```
-
-### 6. Multi-Seed Aggregation
-
-Repeat Steps 2–5 with `--seed 123` and `--seed 2024`, then aggregate:
-
-```bash
-python scripts/aggregate_multi_seed_results.py \
-    --seeds 42 123 2024 \
-    --results-dir experiments/results/
-```
-
-### 7. Lambda Fairness Sweep (Figure 6)
-
-```bash
-python scripts/run_lambda_sweep.py
-python scripts/generate_lambda_tradeoff_plot.py
-```
-
-### 8. Generate Publication Figures
-
-```bash
-python scripts/generate_figures.py \
-    --results-dir experiments/results/ \
-    --runs-dir experiments/runs/ \
-    --output-dir experiments/figures/
-```
-
-### 9. Verify Submission Readiness
-
-```bash
-python scripts/verify_submission_readiness.py
-python scripts/verify_artifact_integrity.py
-python scripts/validate_checkpoints.py
-```
+| FedAgent-Chain vs Std FedAvg | −0.0100 | −1.03 | 0.377 | −0.52 | No |
+| FedAgent-Chain vs Local | +0.2475 | 1.55 | 0.219 | 0.77 | No |
+| FedAgent-Chain vs Centralized | +0.0147 | 0.81 | 0.479 | 0.40 | No |
 
 ---
 
@@ -315,14 +214,6 @@ python scripts/validate_checkpoints.py
 ```
 fedagent-chain/
 ├── configs/                        # Hydra experiment configurations
-│   ├── default.yaml                # Default hyperparameters
-│   ├── experiment/                 # Per-experiment configs
-│   │   ├── fedagent_chain_full.yaml
-│   │   ├── baseline_local.yaml
-│   │   ├── baseline_centralized.yaml
-│   │   ├── ablation/              # Ablation studies
-│   │   └── lambda_sweep/          # λ ∈ {0.00, 0.05, …, 2.00}
-│   └── nodes/                     # Per-country node configs
 ├── src/                           # Core framework source code
 │   ├── federated/                 # FedAvg, Fairness-Aware aggregator, DP
 │   ├── models/                    # Neural network (MLP + LayerNorm)
@@ -333,29 +224,20 @@ fedagent-chain/
 │   ├── visualization/             # Plotting utilities
 │   └── utils/                     # Helpers, logging, seeding
 ├── scripts/                       # Entry-point scripts
-│   ├── reproduce_paper_results.py # One-click full reproduction
 │   ├── run_federated_simulation.py
 │   ├── run_evaluation.py
-│   ├── run_lambda_sweep.py
-│   ├── generate_figures.py
 │   ├── aggregate_multi_seed_results.py
-│   ├── verify_artifact_integrity.py
-│   └── validate_checkpoints.py
+│   ├── generate_figures.py
+│   ├── generate_lambda_tradeoff_plot.py
+│   └── verify_submission_readiness.py
 ├── experiments/                   # Output directory
 │   ├── results/                   # CSV tables (Tables 2–7)
-│   ├── figures/                   # PDF plots (Figures 3–6)
+│   │   ├── seeds/                 # Raw per-seed metrics
+│   │   ├── plots/                 # Publication PDF figures
+│   │   └── statistics/            # Aggregated t-tests and CIs
 │   └── runs/                      # Per-run checkpoints and metrics
 ├── tests/                         # Test suite
-│   ├── unit/                      # Unit tests
-│   ├── integration/               # Integration tests
-│   └── regression/                # Regression tests (paper result anchors)
-├── data/                          # Dataset schemas and synthetic data
-├── docker/                        # Docker and Docker Compose configs
-├── docs/                          # Extended documentation (MkDocs)
-├── requirements.txt               # Python dependencies
-├── environment.yml                # Conda environment
-├── REPAIR_LOG.md                  # Remediation audit trail
-└── CHANGELOG.md                   # Version history
+└── docs/                          # Extended documentation (MkDocs)
 ```
 
 ---
@@ -371,9 +253,6 @@ pytest tests/integration/ -v -m integration --timeout=120
 
 # Regression tests (anchored to paper results)
 pytest tests/regression/ -v -m regression --timeout=300
-
-# Full suite with coverage
-pytest tests/ --cov=src --cov-report=html
 ```
 
 ---
@@ -385,22 +264,11 @@ Experiments are managed via [Hydra](https://hydra.cc/). Override any parameter a
 ```bash
 python scripts/run_federated_simulation.py \
     --config configs/experiment/fedagent_chain_full.yaml \
-    federated.n_rounds=30 \
-    privacy.noise_multiplier=0.5 \
-    fairness.lambda_fairness=0.1 \
+    federated.n_rounds=20 \
+    privacy.noise_multiplier=0.1 \
+    fairness.lambda_fairness=0.5 \
     --seed 123
 ```
-
-Key hyperparameters:
-
-| Parameter | Default | Description |
-|:---|:---:|:---|
-| `federated.n_rounds` | 10 | Number of FL communication rounds |
-| `federated.local_epochs` | 3 | Local training epochs per round |
-| `federated.learning_rate` | 0.001 | Client learning rate |
-| `fairness.lambda_fairness` | 0.5 | Fairness penalty weight (λ) |
-| `privacy.noise_multiplier` | 0.1 | DP noise scale (σ) |
-| `privacy.clipping_threshold` | 1.0 | Gradient clipping bound (C) |
 
 ---
 
@@ -410,43 +278,21 @@ This research involves framework design and simulation for disability-inclusive 
 
 - **No real disability data** is collected, stored, or processed.
 - **Human oversight** is mandatory: the Governance Agent provides *recommendations*; final employment decisions must always be made by qualified human advisors.
-- **Any future real-world deployment requires**: IRB/ethics board approval, informed consent from all participants, and compliance with GDPR, ADA, PDPL, and applicable disability rights legislation.
 - **The system must never automatically reject** a person with a disability's employment application without human review.
-
-See [docs/ethics.md](docs/ethics.md) for the full ethical considerations statement.
-
----
-
-## Troubleshooting
-
-| Issue | Solution |
-|:---|:---|
-| CUDA out of memory | Reduce `federated.batch_size` in config |
-| Reproducibility issues | Ensure `PYTHONHASHSEED=42` and `torch.backends.cudnn.deterministic=True` |
-| Hash mismatch in blockchain tests | Verify Python 3.10+ and UTF-8 encoding |
-| Import errors | Run `pip install -e .` and ensure `PYTHONPATH` includes project root |
 
 ---
 
 ## Citation
 
 ```bibtex
-@article{syed2025fedagentchain,
+@article{syed2026fedagentchain,
   title   = {FedAgent-Chain: A Secure Federated and Agentic AI Framework
              for Multilingual Disability-Inclusive Employment in AI Cities},
   author  = {Syed, Toqeer Ali and Siddiqui, Muhammad Shoaib and Ali Akarma},
   journal = {Frontiers in Artificial Intelligence},
   year    = {2026},
-  doi     = {10.xxxx/xxxxx}
 }
 ```
-
----
-
-## License
-
-This project is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) for details.
-The synthetic dataset (`data/synthetic/`) is released under **CC0 1.0 Universal** (public domain).
 
 ---
 

@@ -31,10 +31,14 @@ def main() -> None:
     setup_logging(format="console")
 
     results_dir = Path(args.results_dir)
-    table_files = sorted(results_dir.glob("table_*.csv"))
+    # Search in results_dir, statistics/, and aggregated/
+    patterns = ["table_*.csv", "statistics/table_*.csv", "aggregated/table_*.csv"]
+    table_files = []
+    for p in patterns:
+        table_files.extend(sorted(results_dir.glob(p)))
 
     if not table_files:
-        logger.warning("No result CSVs found. Run run_evaluation.py first.")
+        logger.warning("No result CSVs found. Run run_evaluation.py and aggregation first.")
         return
 
     for csv_path in table_files:

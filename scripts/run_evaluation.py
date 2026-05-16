@@ -70,7 +70,7 @@ def find_run_dir(runs_dir: Path, experiment_name: str, seed: int | None = None) 
     """
     pattern = f"{experiment_name}_*"
     if seed is not None:
-        pattern = f"{experiment_name}_seed{seed}_*"
+        pattern = f"{experiment_name}_seed{seed}*"
     
     candidates = sorted(
         runs_dir.glob(pattern),
@@ -573,7 +573,7 @@ def main() -> None:
     data_dir    = Path(args.data_dir)
 
     if args.seed_subdir:
-        results_dir = ensure_dir(Path(args.results_dir) / f"seed_{args.seed}")
+        results_dir = ensure_dir(Path(args.results_dir) / "seeds" / f"seed_{args.seed}")
     else:
         results_dir = ensure_dir(Path(args.results_dir))
 
