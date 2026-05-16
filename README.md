@@ -281,8 +281,16 @@ For a step-by-step verification guide, see [Reproducibility Checklist](docs/repr
 - **Synthetic Data**: Current results are based on calibrated synthetic data. Performance on real-world clinical or institutional data may vary.
 - **Human-in-the-Loop**: The system is a decision-support tool. We advocate for human oversight in final hiring decisions.
 - **Privacy-Utility Tradeoff**: Stronger DP noise multipliers can degrade matching accuracy.
-
 For a detailed discussion, see [Scientific Hardening & Ethics](docs/scientific_hardening.md).
+
+---
+
+## 📝 Paper Writing Resources
+
+Researchers and authors can use the following artifacts to build the main manuscript and appendix:
+- **[Master Results Inventory](docs/paper_results_inventory.md)**: A complete catalog of every figure, table, and statistical result available in this repository.
+- **[Publication Figures](paper_figures/)**: High-quality PDF versions of all plots.
+- **[Case Study Reports](experiments/results/demos/)**: Qualitative demonstrations for the agentic layer.
 
 ---
 
