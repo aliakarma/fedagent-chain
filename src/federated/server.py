@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import mlflow
 import numpy as np
 from omegaconf import DictConfig
 
@@ -112,6 +111,7 @@ class FederatedServer:
             )
 
         if use_mlflow:
+            import mlflow
             mlflow.log_params({
                 "n_rounds": self.n_rounds,
                 "n_clients": len(clients),
@@ -136,6 +136,7 @@ class FederatedServer:
             self.round_history.append(round_metrics)
 
             if use_mlflow:
+                import mlflow
                 mlflow_metrics = {
                     k: v for k, v in round_metrics.items()
                     if isinstance(v, (int, float))

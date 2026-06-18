@@ -48,7 +48,7 @@ class EmploymentMatchingModel(nn.Module):
     ) -> None:
         super().__init__()
         if hidden_dims is None:
-            hidden_dims = [256, 128, 64]
+            hidden_dims = [256, 128]  # paper: two hidden layers (256, 128)
 
         layers: list[nn.Module] = []
         prev_dim = input_dim
@@ -150,7 +150,7 @@ class EmploymentMatchingModel(nn.Module):
         """
         return cls(
             input_dim=cfg.get("input_dim", cls.INPUT_DIM),
-            hidden_dims=list(cfg.get("hidden_dims", [256, 128, 64])),
+            hidden_dims=list(cfg.get("hidden_dims", [256, 128])),
             dropout_rate=float(cfg.get("dropout_rate", 0.3)),
         )
 

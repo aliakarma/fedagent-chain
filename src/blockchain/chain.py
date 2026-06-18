@@ -199,6 +199,53 @@ class PermissionedBlockchain:
         )
         return record
 
+    @staticmethod
+    def accept_update(
+        consent_valid: bool,
+        access_allowed: bool,
+        within_time_window: bool = True,
+    ) -> bool:
+        """Smart-contract gate AcceptUpdate(k, t) (paper §Blockchain).
+
+        Returns 1 (accept) only if consent is valid AND institutional access is
+        allowed AND the submission falls within the permitted timestamp window;
+        otherwise 0 (reject). The timestamp window models the smart-contract
+        replay/freshness check; a mis-parameterised window is the documented
+        cause of the single false-accept in the unauthorized-update experiment.
+        """
+        return bool(consent_valid and access_allowed and within_time_window)
+
+    def submit_with_validation(
+        self,
+        protected_update: np.ndarray,
+        node_id: str,
+        round_number: int,
+        consent_ref: str,
+        policy_ref: str,
+        consent_valid: bool,
+        access_allowed: bool,
+        within_time_window: bool = True,
+    ) -> Optional[BlockchainRecord]:
+        """Validate an update via the smart contract, then log it if accepted.
+
+        Returns the created :class:`BlockchainRecord` when accepted, or ``None``
+        when the smart contract rejects the (unauthorized) submission. Rejected
+        submissions are never written to the chain.
+        """
+        if not self.accept_update(consent_valid, access_allowed, within_time_window):
+            logger.warning(
+                "Smart contract REJECTED update",
+                node_id=node_id,
+                round_number=round_number,
+                consent_valid=consent_valid,
+                access_allowed=access_allowed,
+                within_time_window=within_time_window,
+            )
+            return None
+        return self.submit_model_update_hash(
+            protected_update, node_id, round_number, consent_ref, policy_ref
+        )
+
     def submit_governance_event(
         self,
         node_id: str,

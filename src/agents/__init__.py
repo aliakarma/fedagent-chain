@@ -6,6 +6,7 @@ from src.agents.governance_agent import GovernanceAgent
 from src.agents.upskilling_agent import UpskillingAgent
 from src.agents.accommodation_agent import AccommodationAgent
 from src.agents.multilingual_agent import MultilingualCommunicationAgent
+from src.agents.education_agent import EducationAgent
 
 __all__ = [
     "BaseAgent",
@@ -15,4 +16,5 @@ __all__ = [
     "UpskillingAgent",
     "AccommodationAgent",
     "MultilingualCommunicationAgent",
+    "EducationAgent",
 ]

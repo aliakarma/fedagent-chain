@@ -29,7 +29,7 @@ class GovernanceAgent(BaseAgent):
     Parameters
     ----------
     agent_cfg : DictConfig
-        Must contain `review_threshold` (float, default 0.70).
+        Must contain `review_threshold` (float, default 0.65 — paper τ).
     governance_threshold : float
         Alias for review_threshold; kept for BaseAgent API compatibility.
     """
@@ -37,7 +37,7 @@ class GovernanceAgent(BaseAgent):
     def __init__(
         self,
         agent_cfg: DictConfig,
-        governance_threshold: float = 0.70,
+        governance_threshold: float = 0.65,
     ) -> None:
         threshold = float(agent_cfg.get("review_threshold", governance_threshold))
         super().__init__(agent_cfg, governance_threshold=threshold)
