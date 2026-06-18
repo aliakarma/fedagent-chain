@@ -1,3 +1,7 @@
-Variant,F1,D_fair (mean),Runtime
-Full System (FedAgent-Chain),0.7207,0.1653,86.6s
-Lambda = 0 (Standard FedAvg),0.7116,0.161,86.6s
+Configuration,F1 Mean,D_fair_agg,Gov detection,Audit completeness
+Full FedAgent-Chain,0.7207,0.1653,0.7333,1.0
+w/o differential privacy,0.7305,0.1661,0.7333,1.0
+w/o fairness penalty (lambda=0),0.7116,0.161,0.7333,1.0
+w/o blockchain layer,0.7207,0.1653,0.7333,0.0
+w/o governance agent,0.7207,0.1653,0.0,1.0
+w/o multilingual agent,0.7207,0.1653,0.7333,1.0

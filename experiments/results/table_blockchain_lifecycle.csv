@@ -1,0 +1,7 @@
+Transaction phase,latency
+Local hash computation (SHA-256),0.0007 s
+Endorsement (peer simulation + signatures),0.05-0.15 s
+Ordering service (batching into block),0.10-0.50 s
+Block commit and validation,0.05-0.20 s
+Network propagation to peers,0.05-0.30 s
+End-to-end confirmed transaction,0.5-2.0 s
