@@ -7,7 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-LAMBDAS = [0.00, 0.05, 0.10, 0.20, 0.30, 0.50, 1.00, 2.00]
+# Paper sweep set: {0.0, 0.1, 0.2, 0.3, 0.5, 1.0, 2.0, 5.0}
+LAMBDAS = [0.00, 0.10, 0.20, 0.30, 0.50, 1.00, 2.00, 5.00]
 SEED = 42
 
 for lam in LAMBDAS:
