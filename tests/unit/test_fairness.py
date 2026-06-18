@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 
 from src.federated.fairness import (
+    compute_all_disparities,
     compute_fairness_disparity,
     compute_fairness_penalty,
-    compute_all_disparities,
     fairness_reweight_samples,
 )
 
@@ -44,6 +44,7 @@ class TestComputeFairnessDisparity:
     def test_disparity_is_non_negative(self):
         """D_fair must always be ≥ 0."""
         import random
+
         for _ in range(20):
             n = random.randint(2, 8)
             metrics = {f"g{i}": random.random() for i in range(n)}

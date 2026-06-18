@@ -4,11 +4,7 @@ import numpy as np
 import pytest
 
 from src.agents.education_agent import EducationAgent
-from src.data.education_catalog import (
-    COMPETENCIES,
-    JOB_ROLE_REQUIREMENTS,
-    N_COMPETENCIES,
-)
+from src.data.education_catalog import COMPETENCIES, JOB_ROLE_REQUIREMENTS, N_COMPETENCIES
 
 
 @pytest.fixture()
@@ -60,8 +56,9 @@ def test_pathway_prefers_role_aligned_resources(agent: EducationAgent) -> None:
     # A learner with zero competencies targeting data entry should get a pathway
     # whose top resources are aligned with the data-entry role.
     priority = np.ones(N_COMPETENCIES)
-    pathway = agent.recommend_pathway(priority, "data_entry_assistant",
-                                      accessibility_modes={"simplified_text"})
+    pathway = agent.recommend_pathway(
+        priority, "data_entry_assistant", accessibility_modes={"simplified_text"}
+    )
     assert len(pathway) <= agent.top_k_resources
     assert pathway, "pathway should not be empty"
     assert any(r["role_aligned"] for r in pathway)
@@ -84,9 +81,13 @@ def test_readiness_threshold_gating(agent: EducationAgent) -> None:
 def test_run_ready_learner_flags_transition(agent: EducationAgent) -> None:
     competent = [0.9] * N_COMPETENCIES
     out = agent.run(
-        user_id="u1", competencies=competent, target_role="data_entry_assistant",
-        disability_category="cognitive", assessment_score=0.9,
-        training_completion=0.9, accommodation_compatibility=0.9,
+        user_id="u1",
+        competencies=competent,
+        target_role="data_entry_assistant",
+        disability_category="cognitive",
+        assessment_score=0.9,
+        training_completion=0.9,
+        accommodation_compatibility=0.9,
     )
     assert out.agent_type == "EducationAgent"
     assert out.metadata["ready_for_transition"] is True
@@ -96,9 +97,13 @@ def test_run_ready_learner_flags_transition(agent: EducationAgent) -> None:
 def test_run_underprepared_learner_recommends_cycle(agent: EducationAgent) -> None:
     weak = [0.0] * N_COMPETENCIES
     out = agent.run(
-        user_id="u2", competencies=weak, target_role="digital_accessibility_tester",
-        disability_category="vision", assessment_score=0.2,
-        training_completion=0.2, accommodation_compatibility=0.3,
+        user_id="u2",
+        competencies=weak,
+        target_role="digital_accessibility_tester",
+        disability_category="vision",
+        assessment_score=0.2,
+        training_completion=0.2,
+        accommodation_compatibility=0.3,
     )
     assert out.metadata["ready_for_transition"] is False
     assert out.metadata["skill_gap_l1"] > 0.0

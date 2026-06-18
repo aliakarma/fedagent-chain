@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+
 import numpy as np
 import pytest
 
@@ -38,8 +39,7 @@ class TestBlockchainPipelineIntegration:
         bc = PermissionedBlockchain(records_per_block=3)
         for i in range(6):
             bc.submit_model_update_hash(
-                np.ones(10, dtype=np.float32) * i,
-                f"node_{i % 2}", i, f"cr{i}", "pr"
+                np.ones(10, dtype=np.float32) * i, f"node_{i % 2}", i, f"cr{i}", "pr"
             )
         export_path = tmp_path / "audit.json"
         bc.export_audit_log(export_path)

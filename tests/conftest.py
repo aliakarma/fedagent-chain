@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
 from src.blockchain.chain import PermissionedBlockchain
 from src.data.schema import (
-    DisabilityCategory, EducationLevel, EmploymentGoal,
-    NodeID, UserProfile, WorkMode,
+    DisabilityCategory,
+    EducationLevel,
+    EmploymentGoal,
+    NodeID,
+    UserProfile,
+    WorkMode,
 )
 from src.data.synthetic_generator import generate_synthetic_node_data
 from src.utils.seed_utils import set_global_seed
@@ -26,46 +29,48 @@ def reset_seed():
 @pytest.fixture
 def minimal_cfg():
     """Minimal OmegaConf config for unit tests."""
-    return OmegaConf.create({
-        "federated": {
-            "n_rounds": 3,
-            "min_clients": 2,
-            "local_epochs": 2,
-            "batch_size": 16,
-            "learning_rate": 0.01,
-        },
-        "model": {
-            "input_dim": 91,
-            "hidden_dims": [32, 16],
-            "dropout_rate": 0.1,
-        },
-        "privacy": {
-            "enabled": True,
-            "clipping_threshold": 1.0,
-            "noise_multiplier": 0.1,
-        },
-        "fairness": {
-            "enabled": True,
-            "lambda_fairness": 0.1,
-            "protected_groups": ["disability_category"],
-        },
-        "blockchain": {
-            "enabled": True,
-            "records_per_block": 5,
-        },
-        "agents": {
-            "employment": {
-                "alpha": 0.40,
-                "beta": 0.25,
-                "gamma": 0.20,
-                "delta": 0.15,
-                "top_k": 5,
+    return OmegaConf.create(
+        {
+            "federated": {
+                "n_rounds": 3,
+                "min_clients": 2,
+                "local_epochs": 2,
+                "batch_size": 16,
+                "learning_rate": 0.01,
             },
-            "governance": {
-                "review_threshold": 0.70,
+            "model": {
+                "input_dim": 91,
+                "hidden_dims": [32, 16],
+                "dropout_rate": 0.1,
             },
-        },
-    })
+            "privacy": {
+                "enabled": True,
+                "clipping_threshold": 1.0,
+                "noise_multiplier": 0.1,
+            },
+            "fairness": {
+                "enabled": True,
+                "lambda_fairness": 0.1,
+                "protected_groups": ["disability_category"],
+            },
+            "blockchain": {
+                "enabled": True,
+                "records_per_block": 5,
+            },
+            "agents": {
+                "employment": {
+                    "alpha": 0.40,
+                    "beta": 0.25,
+                    "gamma": 0.20,
+                    "delta": 0.15,
+                    "top_k": 5,
+                },
+                "governance": {
+                    "review_threshold": 0.70,
+                },
+            },
+        }
+    )
 
 
 @pytest.fixture

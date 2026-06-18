@@ -5,8 +5,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.blockchain.chain import PermissionedBlockchain
-
 
 class TestPermissionedBlockchain:
     """Tests for the PermissionedBlockchain class."""
@@ -71,11 +69,17 @@ class TestPermissionedBlockchain:
         )
         record_dict = record.model_dump()
         forbidden_fields = [
-            "disability_type", "user_id", "skill_vector",
-            "accommodation_needs", "raw_data", "personal_data",
+            "disability_type",
+            "user_id",
+            "skill_vector",
+            "accommodation_needs",
+            "raw_data",
+            "personal_data",
         ]
         for field in forbidden_fields:
-            assert field not in record_dict, f"Forbidden field '{field}' found in blockchain record!"
+            assert (
+                field not in record_dict
+            ), f"Forbidden field '{field}' found in blockchain record!"
 
     def test_chain_integrity_valid_after_submissions(self, blockchain):
         """Chain integrity should remain valid after multiple submissions."""
@@ -112,6 +116,7 @@ class TestPermissionedBlockchain:
     def test_export_audit_log_creates_file(self, blockchain, tmp_path):
         """export_audit_log should create a valid JSON file."""
         import json
+
         blockchain.submit_model_update_hash(
             np.zeros(10, dtype=np.float32), "node_sa", 1, "cr1", "pr1"
         )

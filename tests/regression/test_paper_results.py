@@ -7,17 +7,17 @@ import pytest
 
 RESULTS_DIR = Path("experiments/results")
 STATS_DIR = RESULTS_DIR / "statistics"
-TOL = 0.010   # tolerance against paper-reported values
+TOL = 0.010  # tolerance against paper-reported values
 
 
 # ── Paper-reported reference values (disable.tex) ─────────────────────────────
 REFERENCE = {
-    "fedagent_chain_f1_mean":   0.7207,
-    "standard_fedavg_f1_mean":  0.7116,
-    "local_baseline_f1_mean":   0.5380,
-    "centralized_lr_f1_mean":   0.7115,
-    "centralized_nn_f1_mean":   0.7383,
-    "disability_disparity_fedagent":    0.0517,
+    "fedagent_chain_f1_mean": 0.7207,
+    "standard_fedavg_f1_mean": 0.7116,
+    "local_baseline_f1_mean": 0.5380,
+    "centralized_lr_f1_mean": 0.7115,
+    "centralized_nn_f1_mean": 0.7383,
+    "disability_disparity_fedagent": 0.0517,
     "disability_disparity_standard_fl": 0.0428,
 }
 
@@ -40,13 +40,16 @@ class TestTable2ModelPerformance:
         for needle in ["FedAgent", "FedAvg", "Local", "Centralized (LR)", "Centralized (NN)"]:
             assert not _method_row(df, needle).empty, f"missing method: {needle}"
 
-    @pytest.mark.parametrize("needle,key", [
-        ("FedAgent",        "fedagent_chain_f1_mean"),
-        ("FedAvg",          "standard_fedavg_f1_mean"),
-        ("Local",           "local_baseline_f1_mean"),
-        ("Centralized (LR)", "centralized_lr_f1_mean"),
-        ("Centralized (NN)", "centralized_nn_f1_mean"),
-    ])
+    @pytest.mark.parametrize(
+        "needle,key",
+        [
+            ("FedAgent", "fedagent_chain_f1_mean"),
+            ("FedAvg", "standard_fedavg_f1_mean"),
+            ("Local", "local_baseline_f1_mean"),
+            ("Centralized (LR)", "centralized_lr_f1_mean"),
+            ("Centralized (NN)", "centralized_nn_f1_mean"),
+        ],
+    )
     def test_f1_matches_paper(self, needle, key):
         df = load_table(STATS_DIR / "table_2_multi_seed_summary.csv")
         if df is None:
@@ -55,9 +58,9 @@ class TestTable2ModelPerformance:
         if row.empty:
             pytest.skip(f"{needle} row not present")
         actual = float(row["F1_mean"].iloc[0])
-        assert abs(actual - REFERENCE[key]) <= TOL, (
-            f"{needle} F1_mean={actual} deviates from paper {REFERENCE[key]}"
-        )
+        assert (
+            abs(actual - REFERENCE[key]) <= TOL
+        ), f"{needle} F1_mean={actual} deviates from paper {REFERENCE[key]}"
 
 
 @pytest.mark.regression
@@ -67,7 +70,9 @@ class TestStatisticalTests:
         df = load_table(STATS_DIR / "statistical_tests.csv")
         if df is None:
             pytest.skip("Run aggregate_multi_seed_results.py first.")
-        nn = df[df["comparison"].str.contains("Centralized (NN)", case=False, na=False, regex=False)]
+        nn = df[
+            df["comparison"].str.contains("Centralized (NN)", case=False, na=False, regex=False)
+        ]
         assert not nn.empty, "missing FedAgent-Chain vs Centralized (NN) comparison"
         assert abs(float(nn["cohens_d"].iloc[0]) - (-0.31)) <= 0.05
 
@@ -107,8 +112,14 @@ class TestTable4BlockchainAuditability:
             pytest.skip("Run run_blockchain_audit.py first.")
         col = df.columns[0]
         text = " ".join(df[col].astype(str)).lower()
-        for needle in ["hash logging", "consent validation", "aggregation event",
-                       "unauthorized update", "hash computation", "raw disability"]:
+        for needle in [
+            "hash logging",
+            "consent validation",
+            "aggregation event",
+            "unauthorized update",
+            "hash computation",
+            "raw disability",
+        ]:
             assert needle in text, f"missing blockchain indicator: {needle}"
 
     def test_unauthorized_rejection_rate(self):

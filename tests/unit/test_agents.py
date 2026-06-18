@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from omegaconf import OmegaConf
 
-from src.agents.base_agent import AgentOutput, BaseAgent
+from src.agents.base_agent import AgentOutput
 from src.agents.employment_agent import EmploymentAgent
 from src.data.synthetic_generator import generate_job_profiles, generate_user_profiles
 from src.utils.seed_utils import get_rng
@@ -13,13 +13,15 @@ from src.utils.seed_utils import get_rng
 
 @pytest.fixture
 def agent_cfg():
-    return OmegaConf.create({
-        "alpha": 0.40,
-        "beta": 0.25,
-        "gamma": 0.20,
-        "delta": 0.15,
-        "top_k": 5,
-    })
+    return OmegaConf.create(
+        {
+            "alpha": 0.40,
+            "beta": 0.25,
+            "gamma": 0.20,
+            "delta": 0.15,
+            "top_k": 5,
+        }
+    )
 
 
 @pytest.fixture
@@ -108,6 +110,7 @@ class TestEmploymentAgent:
 
     def test_perfect_accommodation_coverage(self, agent_cfg):
         import numpy as np
+
         agent = EmploymentAgent(agent_cfg)
         needs = np.array([1, 1, 0, 1, 0] * 4, dtype=float)
         provided = np.array([1, 1, 1, 1, 1] * 4, dtype=float)
@@ -116,6 +119,7 @@ class TestEmploymentAgent:
 
     def test_zero_accommodation_needs_full_score(self, agent_cfg):
         import numpy as np
+
         agent = EmploymentAgent(agent_cfg)
         needs = np.zeros(20, dtype=float)
         provided = np.zeros(20, dtype=float)

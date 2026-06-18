@@ -134,10 +134,12 @@ class TestFedAvgAggregator:
 class TestFairnessAwareFedAvgAggregator:
 
     def setup_method(self):
-        self.cfg = OmegaConf.create({
-            "lambda_fairness": 0.1,
-            "protected_groups": ["disability_category"],
-        })
+        self.cfg = OmegaConf.create(
+            {
+                "lambda_fairness": 0.1,
+                "protected_groups": ["disability_category"],
+            }
+        )
         self.agg = FairnessAwareFedAvgAggregator(self.cfg)
 
     def test_fairness_weights_sum_to_one(self):

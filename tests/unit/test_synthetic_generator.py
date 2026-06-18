@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from src.data.schema import DisabilityCategory, NodeID, UserProfile
@@ -88,7 +87,7 @@ class TestComputeSuitabilityLabel:
         users = generate_user_profiles("united_states", 5, rng)
         jobs = generate_job_profiles("united_states", 5, rng)
         # At least some pairs should be positive with diverse profiles
-        labels = [compute_suitability_label(u, j)[0] for u, j in zip(users, jobs)]
+        labels = [compute_suitability_label(u, j)[0] for u, j in zip(users, jobs, strict=False)]
         # Not all should be 0
         assert any(l == 1 for l in labels) or any(l == 0 for l in labels)
 
@@ -114,11 +113,15 @@ class TestGenerateSyntheticNodeData:
         assert len(data["users"]) == 25
 
     def test_job_count(self):
-        data = generate_synthetic_node_data("united_states", n_users=10, n_jobs=15, n_pairs=30, seed=1)
+        data = generate_synthetic_node_data(
+            "united_states", n_users=10, n_jobs=15, n_pairs=30, seed=1
+        )
         assert len(data["jobs"]) == 15
 
     def test_outcomes_have_required_columns(self):
-        data = generate_synthetic_node_data("saudi_arabia", n_users=10, n_jobs=5, n_pairs=20, seed=2)
+        data = generate_synthetic_node_data(
+            "saudi_arabia", n_users=10, n_jobs=5, n_pairs=20, seed=2
+        )
         required_cols = {"user_id", "job_id", "suitability_label", "suitability_score"}
         assert required_cols.issubset(set(data["outcomes"].columns))
 
