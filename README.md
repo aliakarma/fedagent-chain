@@ -1,6 +1,6 @@
 # FedAgent-Chain
 
-**A Secure Federated and Agentic AI Framework for Multilingual Disability-Inclusive Employment in AI Cities**
+**FedAgent-Chain: A Secure Federated and Agentic AI Framework for Multilingual Disability-Inclusive Employment in AI Cities**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
@@ -9,8 +9,8 @@
 [![Fairness-Aware](https://img.shields.io/badge/Aggregation-Fairness--Aware-purple.svg)](#fairness--heterogeneity-analysis)
 [![Blockchain Audit](https://img.shields.io/badge/Audit-Blockchain--Backed-teal.svg)](#blockchain-audit)
 
-> Syed, Toqeer Ali · Siddiqui, Muhammad Shoaib · Ali Akarma
-> *Frontiers in Artificial Intelligence*, 2026
+> Syed, Toqeer Ali · Siddiqui, Muhammad Shoaib · Ali Akarma · Antonio Formisano
+> *MDPI Smart Cities*, 2026
 
 ---
 
@@ -86,13 +86,13 @@ The framework achieves **competitive federated performance** while providing tru
 ┌────────────────────────▼─────────────────────────────────────┐
 │  Layer 4 — Security & Privacy                                │
 │  Differential Privacy (ε,δ) · LayerNorm Stabilisation        │
-│  Gradient Clipping (C=1.0) · Noise Multiplier (σ=0.1)       │
+│  Gradient Clipping (C=1.0) · Noise Multiplier (σ=0.1)        │
 └────────────────────────┬─────────────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────────────┐
 │  Layer 5 — Federated Aggregation                             │
-│  Standard FedAvg │ Fairness-Aware FedAvg (λ-penalty)        │
-│  Weight formula: ρ_i = 1 + λ · min-group-F1_i               │
+│  Standard FedAvg │ Fairness-Aware FedAvg (λ-penalty)         │
+│  Weight formula: ρ_i = 1 + λ · min-group-F1_i                │
 └─────────┬────────────────────────────────────────────────────┘
           │                              │ Audit Hashes
 ┌─────────▼───────────────┐  ┌───────────▼────────────────────┐
@@ -481,8 +481,8 @@ Researchers and authors can use the following artifacts to build the main manusc
 @article{syed2026fedagentchain,
   title   = {FedAgent-Chain: A Secure Federated and Agentic AI Framework
              for Multilingual Disability-Inclusive Employment in AI Cities},
-  author  = {Syed, Toqeer Ali and Siddiqui, Muhammad Shoaib and Ali Akarma},
-  journal = {Frontiers in Artificial Intelligence},
+  author  = {Syed, Toqeer Ali and Siddiqui, Muhammad Shoaib, Ali Akarma and Antonio Formisano},
+  journal = {MDPI Smart Cities},
   year    = {2026},
 }
 ```
