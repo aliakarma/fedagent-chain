@@ -36,19 +36,24 @@ def main() -> None:
     set_global_seed(args.seed)
 
     from omegaconf import OmegaConf
+
     cfg = load_config(args.config)
     if args.override:
         override_cfg = OmegaConf.from_dotlist(args.override)
         cfg = OmegaConf.merge(cfg, override_cfg)
-        
+
     exp_name = cfg.get("experiment", {}).get("name", "baseline")
     logger.info("Running baseline", experiment=exp_name, seed=args.seed)
 
     # For baselines, we import and reuse the federated simulation infrastructure
     from scripts.run_federated_simulation import run_simulation_from_config
-    
-    output_dir = Path(args.output_dir) if args.output_dir else Path(f"experiments/runs/{exp_name}_seed{args.seed}")
-    
+
+    output_dir = (
+        Path(args.output_dir)
+        if args.output_dir
+        else Path(f"experiments/runs/{exp_name}_seed{args.seed}")
+    )
+
     run_simulation_from_config(
         cfg=cfg,
         seed=args.seed,

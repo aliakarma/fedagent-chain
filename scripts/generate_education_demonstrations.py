@@ -7,11 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.agents.education_agent import EducationAgent
-from src.data.education_catalog import (
-    COMPETENCIES,
-    DISABILITY_ADAPTATIONS,
-    N_COMPETENCIES,
-)
+from src.data.education_catalog import COMPETENCIES, DISABILITY_ADAPTATIONS, N_COMPETENCIES
 from src.utils.io_utils import ensure_dir
 from src.utils.logging_utils import get_logger, setup_logging
 
@@ -36,13 +32,22 @@ SCENARIOS = [
         "target_role": "data_entry_assistant",
         "language": "en",
         "competencies": _competency_vector(
-            digital_literacy=0.5, data_entry=0.4, spreadsheet_skills=0.3,
-            task_accuracy=0.45, attention_to_detail=0.4, time_management=0.5,
-            assessment_performance=0.5),
-        "assessment_score": 0.55, "training_completion": 0.5,
+            digital_literacy=0.5,
+            data_entry=0.4,
+            spreadsheet_skills=0.3,
+            task_accuracy=0.45,
+            attention_to_detail=0.4,
+            time_management=0.5,
+            assessment_performance=0.5,
+        ),
+        "assessment_score": 0.55,
+        "training_completion": 0.5,
         "accommodation_compatibility": 0.75,
-        "accommodations": ["task checklists", "flexible task duration",
-                           "supervisor verification at defined intervals"],
+        "accommodations": [
+            "task checklists",
+            "flexible task duration",
+            "supervisor verification at defined intervals",
+        ],
     },
     {
         "slug": "education_pathway_2_hearing_customer_support",
@@ -52,13 +57,23 @@ SCENARIOS = [
         "target_role": "remote_customer_support_officer",
         "language": "en",
         "competencies": _competency_vector(
-            digital_literacy=0.6, language_proficiency=0.6, written_communication=0.5,
-            customer_service=0.4, ticket_handling=0.3, workplace_behavior=0.6,
-            time_management=0.55, assessment_performance=0.55),
-        "assessment_score": 0.6, "training_completion": 0.55,
+            digital_literacy=0.6,
+            language_proficiency=0.6,
+            written_communication=0.5,
+            customer_service=0.4,
+            ticket_handling=0.3,
+            workplace_behavior=0.6,
+            time_management=0.55,
+            assessment_performance=0.55,
+        ),
+        "assessment_score": 0.6,
+        "training_completion": 0.55,
         "accommodation_compatibility": 0.8,
-        "accommodations": ["captioned meetings", "text-based escalation channels",
-                           "platforms with visual notifications"],
+        "accommodations": [
+            "captioned meetings",
+            "text-based escalation channels",
+            "platforms with visual notifications",
+        ],
     },
     {
         "slug": "education_pathway_3_vision_accessibility_tester",
@@ -68,14 +83,23 @@ SCENARIOS = [
         "target_role": "digital_accessibility_tester",
         "language": "en",
         "competencies": _competency_vector(
-            digital_literacy=0.6, accessibility_testing=0.4, screen_reader_use=0.6,
-            keyboard_navigation=0.55, defect_reporting=0.35, attention_to_detail=0.6,
-            assistive_tech_readiness=0.6, assessment_performance=0.5),
-        "assessment_score": 0.55, "training_completion": 0.5,
+            digital_literacy=0.6,
+            accessibility_testing=0.4,
+            screen_reader_use=0.6,
+            keyboard_navigation=0.55,
+            defect_reporting=0.35,
+            attention_to_detail=0.6,
+            assistive_tech_readiness=0.6,
+            assessment_performance=0.5,
+        ),
+        "assessment_score": 0.55,
+        "training_completion": 0.5,
         "accommodation_compatibility": 0.82,
-        "accommodations": ["accessible testing tools",
-                           "screen-reader compatible dashboards",
-                           "keyboard-navigable work environments"],
+        "accommodations": [
+            "accessible testing tools",
+            "screen-reader compatible dashboards",
+            "keyboard-navigable work environments",
+        ],
     },
     {
         "slug": "education_pathway_4_asd_software_testing",
@@ -85,13 +109,23 @@ SCENARIOS = [
         "target_role": "junior_software_testing_assistant",
         "language": "en",
         "competencies": _competency_vector(
-            digital_literacy=0.6, test_case_execution=0.4, defect_reporting=0.35,
-            attention_to_detail=0.7, problem_solving=0.5, workplace_behavior=0.4,
-            assessment_performance=0.5),
-        "assessment_score": 0.6, "training_completion": 0.5,
+            digital_literacy=0.6,
+            test_case_execution=0.4,
+            defect_reporting=0.35,
+            attention_to_detail=0.7,
+            problem_solving=0.5,
+            workplace_behavior=0.4,
+            assessment_performance=0.5,
+        ),
+        "assessment_score": 0.6,
+        "training_completion": 0.5,
         "accommodation_compatibility": 0.78,
-        "accommodations": ["written task instructions", "reduced sensory distraction",
-                           "structured feedback", "clearly defined supervisor channels"],
+        "accommodations": [
+            "written task instructions",
+            "reduced sensory distraction",
+            "structured feedback",
+            "clearly defined supervisor channels",
+        ],
     },
 ]
 
@@ -112,8 +146,10 @@ def render_demo(agent: EducationAgent, scenario: dict) -> str:
 
     lines: list[str] = []
     lines.append(f"# Education-to-Employment Pathway — {scenario['title']}\n")
-    lines.append("> Generated by the rule-based EducationAgent (FedAgent-Chain §5). "
-                 "All learner data stays local; only protected model updates leave the node.\n")
+    lines.append(
+        "> Generated by the rule-based EducationAgent (FedAgent-Chain §5). "
+        "All learner data stays local; only protected model updates leave the node.\n"
+    )
     lines.append("## Learner & Target")
     lines.append(f"- **Disability profile:** {scenario['disability_label']}")
     lines.append(f"- **Target role:** `{scenario['target_role']}`")
@@ -137,14 +173,20 @@ def render_demo(agent: EducationAgent, scenario: dict) -> str:
         lines.append(", ".join(adaptations) + "\n")
 
     lines.append("## Workplace-Readiness Evaluation")
-    decision = ("ready for human-reviewed employment transition"
-                if meta["ready_for_transition"]
-                else "below threshold — another adaptive learning cycle recommended")
-    lines.append(f"- **Readiness W(i,r):** {meta['readiness']} "
-                 f"(threshold b_r = {meta['readiness_threshold']})")
+    decision = (
+        "ready for human-reviewed employment transition"
+        if meta["ready_for_transition"]
+        else "below threshold — another adaptive learning cycle recommended"
+    )
+    lines.append(
+        f"- **Readiness W(i,r):** {meta['readiness']} "
+        f"(threshold b_r = {meta['readiness_threshold']})"
+    )
     lines.append(f"- **Decision:** {decision}")
-    lines.append(f"- **Governance review required:** {out.requires_human_review} "
-                 f"(risk {round(out.risk_score, 3)})\n")
+    lines.append(
+        f"- **Governance review required:** {out.requires_human_review} "
+        f"(risk {round(out.risk_score, 3)})\n"
+    )
 
     lines.append("## Workplace Accommodation Plan (shared minimally with employer)")
     for a in scenario["accommodations"]:

@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data.synthetic_generator import save_synthetic_dataset
 from src.utils.config import load_config
-from src.utils.logging_utils import setup_logging, get_logger
+from src.utils.logging_utils import get_logger, setup_logging
 from src.utils.seed_utils import set_global_seed
 
 logger = get_logger("generate_synthetic_data")
@@ -42,27 +42,39 @@ def parse_args() -> argparse.Namespace:
         help="Path to experiment configuration YAML file.",
     )
     parser.add_argument(
-        "--seed", type=int, default=42,
+        "--seed",
+        type=int,
+        default=42,
         help="Random seed for reproducibility.",
     )
     parser.add_argument(
-        "--output-dir", type=str, default="data/synthetic/",
+        "--output-dir",
+        type=str,
+        default="data/synthetic/",
         help="Directory to write generated CSV files.",
     )
     parser.add_argument(
-        "--n-users-per-node", type=int, default=None,
+        "--n-users-per-node",
+        type=int,
+        default=None,
         help="Override: number of user profiles per node.",
     )
     parser.add_argument(
-        "--n-jobs-per-node", type=int, default=None,
+        "--n-jobs-per-node",
+        type=int,
+        default=None,
         help="Override: number of job profiles per node.",
     )
     parser.add_argument(
-        "--n-pairs-per-node", type=int, default=None,
+        "--n-pairs-per-node",
+        type=int,
+        default=None,
         help="Override: number of suitability pairs per node.",
     )
     parser.add_argument(
-        "--log-level", type=str, default="INFO",
+        "--log-level",
+        type=str,
+        default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
     return parser.parse_args()
@@ -107,7 +119,7 @@ def main() -> None:
     print(f"   Total users  : {n_users * 4:,}")
     print(f"   Total jobs   : {n_jobs * 4:,}")
     print(f"   Total pairs  : {n_pairs * 4:,}")
-    print(f"\n   Schema documented in: data/synthetic/README.md")
+    print("\n   Schema documented in: data/synthetic/README.md")
 
 
 if __name__ == "__main__":

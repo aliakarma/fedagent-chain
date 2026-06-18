@@ -3,15 +3,16 @@
 
 Checks:
 1. Per-seed tables exist for all 3 seeds
-2. Multi-seed summary std > 0 (seeds are independent)  
+2. Multi-seed summary std > 0 (seeds are independent)
 3. Statistical tests have finite values
 4. Centralized != Local Baseline
 5. FedAgent-Chain fairness improvement exists for at least 2/4 attributes
 """
-import pandas as pd
-import numpy as np
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 RESULTS = Path("experiments/results")
 errors = []
@@ -32,7 +33,9 @@ if summary.exists():
     if not fa_row.empty:
         f1_std = float(fa_row["F1_std"].values[0])
         if f1_std < 0.0001:
-             errors.append(f"F1_std ≈ 0 ({f1_std}) in multi-seed summary — seeds are not independent")
+            errors.append(
+                f"F1_std ≈ 0 ({f1_std}) in multi-seed summary — seeds are not independent"
+            )
     else:
         errors.append("FedAgent-Chain row missing from multi-seed summary")
 
@@ -49,12 +52,14 @@ if t2.exists():
     df = pd.read_csv(t2)
     local_rows = df[df["Method"] == "Local Baseline"]
     central_rows = df[df["Method"] == "Centralized"]
-    
+
     if not local_rows.empty and not central_rows.empty:
         local_f1 = float(local_rows["F1"].values[0])
         central_f1 = float(central_rows["F1"].values[0])
         if abs(local_f1 - central_f1) < 0.005:
-            errors.append(f"Centralized F1 ({central_f1:.4f}) == Local Baseline F1 ({local_f1:.4f})")
+            errors.append(
+                f"Centralized F1 ({central_f1:.4f}) == Local Baseline F1 ({local_f1:.4f})"
+            )
 
 # Report
 print("=== ARTIFACT INTEGRITY CHECK ===")

@@ -31,9 +31,9 @@ logger = get_logger("aggregate_multi_seed")
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
-    p.add_argument("--seeds",       nargs="+", type=int, default=[42, 123, 2024, 777, 999])
-    p.add_argument("--results-dir", type=str,  default="experiments/results/")
-    p.add_argument("--stats-dir",   type=str,  default="experiments/results/statistics/")
+    p.add_argument("--seeds", nargs="+", type=int, default=[42, 123, 2024, 777, 999])
+    p.add_argument("--results-dir", type=str, default="experiments/results/")
+    p.add_argument("--stats-dir", type=str, default="experiments/results/statistics/")
     return p.parse_args()
 
 
@@ -44,7 +44,7 @@ def run_statistical_tests(
     method_b_name: str,
 ) -> dict | None:
     """Run paired t-test and compute Cohen's d between two methods.
-    
+
     Returns None (not a result row) if the test cannot be validly performed.
     This prevents numerically degenerate results (t=-inf, p=0) from being
     written to statistical_tests.csv.
@@ -61,7 +61,7 @@ def run_statistical_tests(
             n_samples=len(a),
         )
         return None
-    
+
     # Guard 2: Degenerate variance (all values identical)
     diff = a - b
     diff_std = float(np.std(diff, ddof=1))
@@ -79,7 +79,7 @@ def run_statistical_tests(
             b_values=list(b),
         )
         return None
-    
+
     # Guard 3: Values must be in valid range [0, 1] for F1
     for arr, name in [(a, method_a_name), (b, method_b_name)]:
         if np.any(arr < 0) or np.any(arr > 1):
@@ -89,9 +89,9 @@ def run_statistical_tests(
                 values=list(arr),
             )
             return None
-    
+
     t_stat, p_value = stats.ttest_rel(a, b)
-    
+
     # Guard 4: Check for infinite or NaN results
     if not np.isfinite(t_stat) or not np.isfinite(p_value):
         logger.error(
@@ -101,7 +101,7 @@ def run_statistical_tests(
             diff_std=diff_std,
         )
         return None
-    
+
     cohens_d = float(np.mean(diff)) / (diff_std + 1e-12)
 
     return {
@@ -112,17 +112,21 @@ def run_statistical_tests(
         "cohens_d": round(float(cohens_d), 4),
         "significant": bool(p_value < 0.05),
         "n_seeds": len(a),
-        "warning": "With n=3 seeds, statistical power is limited. p < 0.05 requires very large effect sizes." if len(a) < 5 else None,
+        "warning": (
+            "With n=3 seeds, statistical power is limited. p < 0.05 requires very large effect sizes."
+            if len(a) < 5
+            else None
+        ),
     }
 
 
 def main() -> None:
     args = parse_args()
     setup_logging(format="console")
-    
+
     results_dir = Path(args.results_dir)
-    stats_dir   = ensure_dir(Path(args.stats_dir))
-    
+    stats_dir = ensure_dir(Path(args.stats_dir))
+
     # ── Seed discovery ───────────────────────────────────────────────────────
     # If seeds are explicitly provided, use them. Otherwise, find all seed_* dirs.
     seeds = args.seeds
@@ -138,15 +142,15 @@ def main() -> None:
         candidates = [
             results_dir / f"seed_{seed}" / "table_2_model_performance.csv",
             results_dir / "seeds" / f"seed_{seed}" / "table_2_model_performance.csv",
-            results_dir / "table_2_model_performance.csv" # Fallback
+            results_dir / "table_2_model_performance.csv",  # Fallback
         ]
-        
+
         t2_path = None
         for cand in candidates:
             if cand.exists():
                 t2_path = cand
                 break
-        
+
         if t2_path:
             per_seed[seed] = pd.read_csv(t2_path)
         else:
@@ -155,8 +159,7 @@ def main() -> None:
 
     if len(per_seed) < 2:
         logger.error(
-            "Need results for at least 2 seeds. "
-            "Run run_evaluation.py for each seed first."
+            "Need results for at least 2 seeds. " "Run run_evaluation.py for each seed first."
         )
         return
 
@@ -166,7 +169,7 @@ def main() -> None:
     methods = per_seed[first_seed]["Method"].tolist()
     f1_by_method: dict[str, list[float]] = {m: [] for m in methods}
 
-    for seed, df in per_seed.items():
+    for df in per_seed.values():
         for method in methods:
             row = df[df["Method"] == method]
             if not row.empty:
@@ -178,22 +181,22 @@ def main() -> None:
         if not f1_list:
             continue
         arr = np.array(f1_list)
-        n   = len(arr)
+        n = len(arr)
         mean = np.mean(arr)
-        std  = np.std(arr, ddof=1) if n > 1 else 0.0
-        
+        std = np.std(arr, ddof=1) if n > 1 else 0.0
+
         row = {
-            "Method":  method,
+            "Method": method,
             "F1_mean": round(float(mean), 4),
-            "F1_std":  round(float(std), 4),
-            "F1_min":  round(float(np.min(arr)), 4),
-            "F1_max":  round(float(np.max(arr)), 4),
+            "F1_std": round(float(std), 4),
+            "F1_min": round(float(np.min(arr)), 4),
+            "F1_max": round(float(np.max(arr)), 4),
             "n_seeds": n,
         }
-        
+
         # 95% Confidence Intervals
         if n > 1:
-            se   = std / np.sqrt(n)
+            se = std / np.sqrt(n)
             df_t = n - 1
             t_cv = t_dist.ppf(0.975, df=df_t)
             row["CI_95_lower"] = round(float(mean - t_cv * se), 4)
@@ -201,9 +204,9 @@ def main() -> None:
         else:
             row["CI_95_lower"] = round(float(mean), 4)
             row["CI_95_upper"] = round(float(mean), 4)
-            
+
         summary_rows.append(row)
-        
+
     summary_df = pd.DataFrame(summary_rows)
     summary_df.to_csv(stats_dir / "table_2_multi_seed_summary.csv", index=False)
 
@@ -227,14 +230,15 @@ def main() -> None:
                     "Skipping comparison due to seed count mismatch",
                     method=method,
                     fedagent_n=len(f1_by_method[fedagent_key]),
-                    method_n=len(f1_by_method[method])
+                    method_n=len(f1_by_method[method]),
                 )
                 continue
-                
+
             result = run_statistical_tests(
                 f1_by_method[fedagent_key],
                 f1_by_method[method],
-                fedagent_key, method,
+                fedagent_key,
+                method,
             )
             if result is not None:
                 test_rows.append(result)
@@ -256,8 +260,8 @@ def main() -> None:
     # ── Aggregate Table 3: Fairness Results ──────────────────────────────────
     logger.info("Aggregating Table 3 (Fairness Disparity) across seeds...")
     fairness_by_attr_method: dict[str, dict[str, list[float]]] = {}
-    
-    for seed, df in per_seed.items():
+
+    for seed in per_seed:
         # Load Table 3 for this seed
         candidates = [
             results_dir / f"seed_{seed}" / "table_3_fairness_results.csv",
@@ -266,13 +270,13 @@ def main() -> None:
         t3_path = next((c for c in candidates if c.exists()), None)
         if not t3_path:
             continue
-            
+
         t3_df = pd.read_csv(t3_path)
         for _, row in t3_df.iterrows():
             attr = str(row["Attribute"])
             if attr not in fairness_by_attr_method:
                 fairness_by_attr_method[attr] = {m: [] for m in methods}
-            
+
             for method in methods:
                 if method in t3_df.columns:
                     val = row[method]
@@ -287,9 +291,11 @@ def main() -> None:
             for method, vals in method_vals.items():
                 if vals:
                     s_row[f"{method}_mean"] = round(float(np.mean(vals)), 4)
-                    s_row[f"{method}_std"] = round(float(np.std(vals, ddof=1)), 4) if len(vals) > 1 else 0.0
+                    s_row[f"{method}_std"] = (
+                        round(float(np.std(vals, ddof=1)), 4) if len(vals) > 1 else 0.0
+                    )
             fairness_summary_rows.append(s_row)
-            
+
         fairness_summary_df = pd.DataFrame(fairness_summary_rows)
         fairness_summary_df.to_csv(stats_dir / "table_3_multi_seed_summary.csv", index=False)
         logger.info("Table 3 multi-seed summary saved")

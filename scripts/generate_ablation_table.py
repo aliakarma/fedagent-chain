@@ -39,12 +39,12 @@ logger = get_logger("generate_ablation_table")
 # Configuration -> (run-dir name or None, F1, D_fair_agg, Gov detection, Audit completeness)
 # Values are the paper's reported ablation results.
 ABLATION_SPEC = [
-    ("Full FedAgent-Chain",              None,               0.7207, 0.1653, 0.7333, 1.0000),
-    ("w/o differential privacy",         "no_dp",            0.7305, 0.1661, 0.7333, 1.0000),
-    ("w/o fairness penalty (lambda=0)",  "no_fairness",      0.7116, 0.1610, 0.7333, 1.0000),
-    ("w/o blockchain layer",             "no_blockchain",    0.7207, 0.1653, 0.7333, 0.0000),
-    ("w/o governance agent",             "no_governance",    0.7207, 0.1653, 0.0000, 1.0000),
-    ("w/o multilingual agent",           "no_multilingual",  0.7207, 0.1653, 0.7333, 1.0000),
+    ("Full FedAgent-Chain", None, 0.7207, 0.1653, 0.7333, 1.0000),
+    ("w/o differential privacy", "no_dp", 0.7305, 0.1661, 0.7333, 1.0000),
+    ("w/o fairness penalty (lambda=0)", "no_fairness", 0.7116, 0.1610, 0.7333, 1.0000),
+    ("w/o blockchain layer", "no_blockchain", 0.7207, 0.1653, 0.7333, 0.0000),
+    ("w/o governance agent", "no_governance", 0.7207, 0.1653, 0.0000, 1.0000),
+    ("w/o multilingual agent", "no_multilingual", 0.7207, 0.1653, 0.7333, 1.0000),
 ]
 
 
@@ -83,13 +83,15 @@ def generate_ablation_table(results_dir: Path) -> pd.DataFrame:
             if measured is not None:
                 logger.info("Using measured F1 for ablation", variant=name, f1=measured)
                 f1_val = measured
-        rows.append({
-            "Configuration": name,
-            "F1 Mean": f1_val,
-            "D_fair_agg": d_fair,
-            "Gov detection": gov,
-            "Audit completeness": audit,
-        })
+        rows.append(
+            {
+                "Configuration": name,
+                "F1 Mean": f1_val,
+                "D_fair_agg": d_fair,
+                "Gov detection": gov,
+                "Audit completeness": audit,
+            }
+        )
     df = pd.DataFrame(rows)
     out = results_dir / "table_ablation.csv"
     df.to_csv(out, index=False)

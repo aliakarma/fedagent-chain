@@ -2,13 +2,14 @@
 """Final verification script for Q1 submission readiness."""
 import sys
 from pathlib import Path
+
 import pandas as pd
 
 errors = []
 warnings = []
 
 RESULTS = Path("experiments/results")
-RUNS    = Path("experiments/runs")
+RUNS = Path("experiments/runs")
 FIGURES = Path("experiments/figures")
 
 # ── CSV tables ──────────────────────────────────────────────────────────────
@@ -37,12 +38,12 @@ if summary_path.exists():
     # Check for "FedAgent" in any column that might have method names
     method_col = "Method" if "Method" in df.columns else df.columns[0]
     row = df[df[method_col].str.contains("FedAgent", na=False)]
-    
+
     if not row.empty:
         n_seeds = int(row["n_seeds"].iloc[0]) if "n_seeds" in row.columns else 0
         if n_seeds < 3:
             errors.append(f"Only {n_seeds} seed(s) in multi-seed summary — need ≥ 3")
-        
+
         f1_std = float(row["F1_std"].iloc[0]) if "F1_std" in row.columns else 0.0
         if f1_std == 0.0:
             errors.append("F1_std == 0.0 — results may still be hardcoded or non-varying")
@@ -66,18 +67,24 @@ if t3_path.exists():
         # Check all attributes for reduction (lower is better for disparity)
         # However, Phase 3 results showed some rows where disparity increased.
         # But for Q1 publication, we usually want to show overall improvement.
-        if not all(df["FedAgent-Chain"].values <= df["Standard FedAvg"].values + 0.05): # Allowing small slack or checking only key ones
-             warnings.append("Fairness check: Some attributes show higher disparity in FedAgent-Chain than Standard FedAvg.")
-        
+        if not all(
+            df["FedAgent-Chain"].values <= df["Standard FedAvg"].values + 0.05
+        ):  # Allowing small slack or checking only key ones
+            warnings.append(
+                "Fairness check: Some attributes show higher disparity in FedAgent-Chain than Standard FedAvg."
+            )
+
         # Core claim check (at least one reduction)
-        reductions = (df["FedAgent-Chain"].values < df["Standard FedAvg"].values)
+        reductions = df["FedAgent-Chain"].values < df["Standard FedAvg"].values
         if not any(reductions):
-             errors.append("FAIRNESS CLAIM INVALID: FedAgent-Chain D_fair not lower than Standard FedAvg for ANY attribute")
+            errors.append(
+                "FAIRNESS CLAIM INVALID: FedAgent-Chain D_fair not lower than Standard FedAvg for ANY attribute"
+            )
 
 # ── Print results ────────────────────────────────────────────────────────────
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("SUBMISSION READINESS CHECK")
-print("="*60)
+print("=" * 60)
 
 if errors:
     print(f"\n[!] {len(errors)} ERROR(S) — DO NOT SUBMIT:")

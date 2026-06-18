@@ -14,20 +14,28 @@ SEED = 42
 for lam in LAMBDAS:
     config_path = Path(f"configs/experiment/lambda_sweep/lambda_{lam:.2f}.yaml")
     assert config_path.exists(), f"Config missing: {config_path}"
-    
+
     print(f"\n=== Lambda = {lam:.2f} ===")
     # Add PYTHONPATH to include src and root, preserving existing environment
     import os
+
     env = os.environ.copy()
     env["PYTHONPATH"] = f"{Path.cwd()}/src;{Path.cwd()}"
-    
-    result = subprocess.run([
-        sys.executable, "scripts/run_federated_simulation.py",
-        "--config", str(config_path),
-        "--seed", str(SEED),
-        "--no-mlflow",
-    ], check=False, env=env)
-    
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_federated_simulation.py",
+            "--config",
+            str(config_path),
+            "--seed",
+            str(SEED),
+            "--no-mlflow",
+        ],
+        check=False,
+        env=env,
+    )
+
     if result.returncode != 0:
         print(f"FAIL: lambda={lam:.2f} simulation failed with code {result.returncode}")
     else:

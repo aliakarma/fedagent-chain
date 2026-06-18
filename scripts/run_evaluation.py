@@ -21,11 +21,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 from torch.utils.data import DataLoader
 
 from src.data.dataset import EmploymentDataset
@@ -33,7 +33,7 @@ from src.evaluation.fairness_evaluator import FairnessEvaluator
 from src.evaluation.metrics import aggregate_metrics_across_nodes, compute_full_metrics
 from src.models.employment_model import EmploymentMatchingModel
 from src.utils.config import load_config
-from src.utils.io_utils import ensure_dir, save_json
+from src.utils.io_utils import ensure_dir
 from src.utils.logging_utils import get_logger, setup_logging
 from src.utils.seed_utils import set_global_seed
 
@@ -44,47 +44,64 @@ NODES = ["saudi_arabia", "united_states", "china", "europe"]
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Run FedAgent-Chain evaluation pipeline.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--runs-dir",    type=str, default="experiments/runs/",
-                   help="Directory containing simulation run outputs.")
-    p.add_argument("--results-dir", type=str, default="experiments/results/",
-                   help="Directory to save evaluation CSV results.")
-    p.add_argument("--data-dir",    type=str, default="data/synthetic",
-                   help="Root directory of the synthetic dataset.")
-    p.add_argument("--seed",        type=int, default=42)
-    p.add_argument("--seed-subdir", action="store_true",
-                   help="Save results to seed-specific subdirectory for multi-seed aggregation.")
-    p.add_argument("--log-level",   type=str, default="INFO")
+    p.add_argument(
+        "--runs-dir",
+        type=str,
+        default="experiments/runs/",
+        help="Directory containing simulation run outputs.",
+    )
+    p.add_argument(
+        "--results-dir",
+        type=str,
+        default="experiments/results/",
+        help="Directory to save evaluation CSV results.",
+    )
+    p.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/synthetic",
+        help="Root directory of the synthetic dataset.",
+    )
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument(
+        "--seed-subdir",
+        action="store_true",
+        help="Save results to seed-specific subdirectory for multi-seed aggregation.",
+    )
+    p.add_argument("--log-level", type=str, default="INFO")
     return p.parse_args()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def find_run_dir(runs_dir: Path, experiment_name: str, seed: int | None = None) -> Path | None:
     """Return the most recent run directory matching experiment_name and optionally seed.
-    
+
     Filters out directories that do not contain a checkpoints/ folder with at least
     one .pt file, allowing fallback to older successful runs if the most recent one failed.
     """
     pattern = f"{experiment_name}_*"
     if seed is not None:
         pattern = f"{experiment_name}_seed{seed}*"
-    
+
     candidates = sorted(
         runs_dir.glob(pattern),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
-    
+
     for candidate in candidates:
         ckpt_dir = candidate / "checkpoints"
         if ckpt_dir.exists() and any(ckpt_dir.glob("*.pt")):
             return candidate
-            
+
     return None
 
 
@@ -113,25 +130,31 @@ def _find_best_checkpoint(run_dir: Path) -> Path:
             valid_history.append(r)
 
     if not valid_history:
-        logger.warning("No round-specific checkpoints found, using final_model.pt", run_dir=str(run_dir))
+        logger.warning(
+            "No round-specific checkpoints found, using final_model.pt", run_dir=str(run_dir)
+        )
         return final_path
 
     best_round_data = max(valid_history, key=lambda r: (r.get("mean_f1", 0.0), r.get("round", 0)))
     best_round = best_round_data.get("round")
-    
+
     candidate = ckpt_dir / f"global_model_round_{best_round:03d}.pt"
-    
+
     if candidate.exists():
         logger.info(
             "Selected best checkpoint",
             round=best_round,
             f1=round(best_round_data.get("mean_f1", 0.0), 4),
-            run_dir=run_dir.name
+            run_dir=run_dir.name,
         )
         return candidate
 
     # Fall back to the nearest saved checkpoint <= best_round
-    logger.warning("Best round checkpoint disappeared, falling back to nearest", best_round=best_round, run_dir=str(run_dir))
+    logger.warning(
+        "Best round checkpoint disappeared, falling back to nearest",
+        best_round=best_round,
+        run_dir=str(run_dir),
+    )
     saved = sorted(ckpt_dir.glob("global_model_round_*.pt"))
     saved_rounds = []
     for p in saved:
@@ -139,7 +162,7 @@ def _find_best_checkpoint(run_dir: Path) -> Path:
             saved_rounds.append((int(p.stem.split("_")[-1]), p))
         except ValueError:
             pass
-            
+
     below = [(r, p) for r, p in saved_rounds if r <= best_round]
     if below:
         rnd, path = max(below, key=lambda x: x[0])
@@ -147,7 +170,11 @@ def _find_best_checkpoint(run_dir: Path) -> Path:
         return path
     elif saved_rounds:
         rnd, path = min(saved_rounds, key=lambda x: x[0])
-        logger.info("Using nearest available checkpoint (later than best)", round=rnd, requested_best=best_round)
+        logger.info(
+            "Using nearest available checkpoint (later than best)",
+            round=rnd,
+            requested_best=best_round,
+        )
         return path
 
     return final_path
@@ -163,8 +190,7 @@ def load_model_from_checkpoint(
     ckpt_path = _find_best_checkpoint(run_dir)
     if not ckpt_path.exists():
         raise FileNotFoundError(
-            f"Checkpoint not found at {ckpt_path}. "
-            "Run run_federated_simulation.py first."
+            f"Checkpoint not found at {ckpt_path}. " "Run run_federated_simulation.py first."
         )
     state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     # Wrap any 0-d scalars to avoid torch.from_numpy issues on re-load
@@ -189,8 +215,8 @@ def evaluate_model_on_node(
     running stats per batch, avoiding the NaN issue.
     """
     node_dir = data_dir / node_id
-    users_df    = pd.read_csv(node_dir / "users.csv")
-    jobs_df     = pd.read_csv(node_dir / "jobs.csv")
+    users_df = pd.read_csv(node_dir / "users.csv")
+    jobs_df = pd.read_csv(node_dir / "jobs.csv")
     outcomes_df = pd.read_csv(node_dir / "outcomes.csv")
 
     full_ds = EmploymentDataset(
@@ -204,16 +230,16 @@ def evaluate_model_on_node(
 
     def _run_inference(train_mode: bool) -> tuple[list, list, list]:
         if train_mode:
-            model.train()   # Recompute BatchNorm stats per batch
+            model.train()  # Recompute BatchNorm stats per batch
         else:
-            model.eval()    # Use running stats (may be corrupted by FedAvg)
+            model.eval()  # Use running stats (may be corrupted by FedAvg)
         y_t, y_p, y_s = [], [], []
         with torch.no_grad():
             for batch in loader:
-                feats  = batch["features"]
+                feats = batch["features"]
                 labels = batch["label"].numpy()
-                probs  = model(feats).squeeze(-1).numpy()
-                preds  = (probs >= 0.5).astype(int)
+                probs = model(feats).squeeze(-1).numpy()
+                preds = (probs >= 0.5).astype(int)
                 y_t.extend(labels.tolist())
                 y_p.extend(preds.tolist())
                 y_s.extend(probs.tolist())
@@ -259,7 +285,9 @@ def build_pooled_training_dataset(
         jobs_df = pd.read_csv(node_dir / "jobs.csv")
         outcomes_df = pd.read_csv(node_dir / "outcomes.csv")
         full_ds = EmploymentDataset(
-            outcomes_df=outcomes_df, users_df=users_df, jobs_df=jobs_df,
+            outcomes_df=outcomes_df,
+            users_df=users_df,
+            jobs_df=jobs_df,
             consent_filter=True,
         )
         train_ds, _ = full_ds.split(test_size=0.20, seed=seed + i * 1000)
@@ -283,9 +311,7 @@ def build_prediction_dataframe(
     data_dir: Path = Path("data/synthetic"),
 ) -> pd.DataFrame:
     """Return a DataFrame with predictions and user attributes for fairness eval."""
-    y_true, y_pred, y_scores, test_ds = evaluate_model_on_node(
-        model, node_id, seed, data_dir
-    )
+    y_true, y_pred, y_scores, test_ds = evaluate_model_on_node(model, node_id, seed, data_dir)
     outcomes = test_ds.outcomes.copy()
     outcomes["predicted_label"] = y_pred
     outcomes["predicted_score"] = y_scores
@@ -293,8 +319,7 @@ def build_prediction_dataframe(
     # Merge user attributes needed by FairnessEvaluator
     users_df = test_ds.users_df.reset_index()
     merged = outcomes.merge(
-        users_df[["user_id", "disability_category",
-                  "language_primary", "preferred_work_mode"]],
+        users_df[["user_id", "disability_category", "language_primary", "preferred_work_mode"]],
         on="user_id",
         how="left",
     )
@@ -303,6 +328,7 @@ def build_prediction_dataframe(
 
 
 # ── Table generators ──────────────────────────────────────────────────────────
+
 
 def generate_table_2(
     models: dict[str, EmploymentMatchingModel],
@@ -318,9 +344,7 @@ def generate_table_2(
             y_true, y_pred, y_scores, _ = evaluate_model_on_node(
                 model, node_id, seed + i * 1000, data_dir
             )
-            node_metrics[node_id] = compute_full_metrics(
-                y_true, y_pred, y_scores, k_values=[5, 10]
-            )
+            node_metrics[node_id] = compute_full_metrics(y_true, y_pred, y_scores, k_values=[5, 10])
             logger.info(
                 "Node evaluated",
                 method=method_name,
@@ -330,18 +354,20 @@ def generate_table_2(
             )
 
         agg = aggregate_metrics_across_nodes(node_metrics)
-        rows.append({
-            "Method":    method_name,
-            "Accuracy":  round(agg["mean_accuracy"],  4),
-            "Precision": round(agg["mean_precision"], 4),
-            "Recall":    round(agg["mean_recall"],    4),
-            "F1":        round(agg["mean_f1"],        4),
-            "F1_std":    round(agg["std_f1"],         4),
-            "P@5":       round(agg.get("mean_precision_at_5", 0.0), 4),
-            "R@5":       round(agg.get("mean_recall_at_5",    0.0), 4),
-            "P@10":      round(agg.get("mean_precision_at_10", 0.0), 4),
-            "R@10":      round(agg.get("mean_recall_at_10",   0.0), 4),
-        })
+        rows.append(
+            {
+                "Method": method_name,
+                "Accuracy": round(agg["mean_accuracy"], 4),
+                "Precision": round(agg["mean_precision"], 4),
+                "Recall": round(agg["mean_recall"], 4),
+                "F1": round(agg["mean_f1"], 4),
+                "F1_std": round(agg["std_f1"], 4),
+                "P@5": round(agg.get("mean_precision_at_5", 0.0), 4),
+                "R@5": round(agg.get("mean_recall_at_5", 0.0), 4),
+                "P@10": round(agg.get("mean_precision_at_10", 0.0), 4),
+                "R@10": round(agg.get("mean_recall_at_10", 0.0), 4),
+            }
+        )
 
     df = pd.DataFrame(rows)
     df.to_csv(results_dir / "table_2_model_performance.csv", index=False)
@@ -361,9 +387,9 @@ def generate_table_3(
 
     attr_display = {
         "disability_category": "Disability Category",
-        "language_primary":    "Language Group",
+        "language_primary": "Language Group",
         "preferred_work_mode": "Work Mode",
-        "node_id":             "Regional Node",
+        "node_id": "Regional Node",
     }
 
     for attr_key, attr_label in attr_display.items():
@@ -371,9 +397,7 @@ def generate_table_3(
         for method_name, model in models.items():
             all_preds = []
             for i, node_id in enumerate(NODES):
-                df_node = build_prediction_dataframe(
-                    model, node_id, seed + i * 1000, data_dir
-                )
+                df_node = build_prediction_dataframe(model, node_id, seed + i * 1000, data_dir)
                 all_preds.append(df_node)
             combined = pd.concat(all_preds, ignore_index=True)
             disparities = evaluator.evaluate(
@@ -408,29 +432,29 @@ def generate_confusion_matrices(
 ) -> None:
     """Generate confusion matrix PDFs for the models."""
     plots_dir = ensure_dir(results_dir / "plots")
-    
+
     for method_name in ["FedAgent-Chain", "Standard FedAvg"]:
         if method_name not in models:
             continue
-            
+
         model = models[method_name]
         all_y_true = []
         all_y_pred = []
-        
+
         for i, node_id in enumerate(NODES):
-            y_true, y_pred, _, _ = evaluate_model_on_node(
-                model, node_id, seed + i * 1000, data_dir
-            )
+            y_true, y_pred, _, _ = evaluate_model_on_node(model, node_id, seed + i * 1000, data_dir)
             all_y_true.extend(y_true.tolist())
             all_y_pred.extend(y_pred.tolist())
-            
+
         cm = confusion_matrix(all_y_true, all_y_pred)
-        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Unsuitable", "Suitable"])
-        
+        disp = ConfusionMatrixDisplay(
+            confusion_matrix=cm, display_labels=["Unsuitable", "Suitable"]
+        )
+
         fig, ax = plt.subplots(figsize=(6, 5))
         disp.plot(cmap="Blues", ax=ax, values_format="d")
         ax.set_title(f"Confusion Matrix: {method_name}")
-        
+
         safe_name = method_name.lower().replace("-", "_").replace(" ", "_")
         plt.savefig(plots_dir / f"confusion_matrix_{safe_name}.pdf", bbox_inches="tight")
         plt.close()
@@ -438,54 +462,23 @@ def generate_confusion_matrices(
 
 
 def generate_table_4_blockchain(run_dir: Path, results_dir: Path) -> pd.DataFrame:
-    """Table 4: Read blockchain metrics from the simulation audit log."""
-    audit_path = run_dir / "blockchain_logs" / "audit_trail.json"
-    if not audit_path.exists():
-        logger.warning("Audit trail not found", path=str(audit_path))
+    """Table 4 (blockchain auditability): the six paper indicators.
+
+    Delegates to the dedicated audit generator (``run_blockchain_audit``) which
+    runs the unauthorized-update rejection experiment and writes both the
+    six-indicator results table and the Hyperledger lifecycle estimates. This
+    keeps the eval pipeline's Table 4 consistent with the paper rather than the
+    legacy four-metric hash summary.
+    """
+    try:
+        from scripts.run_blockchain_audit import generate_blockchain_tables
+
+        df, _ = generate_blockchain_tables(results_dir, seed=42)
+        logger.info("Table 4 saved (six-indicator blockchain audit)")
+        return df
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Blockchain audit table generation failed", error=str(e))
         return pd.DataFrame()
-
-    with open(audit_path, encoding="utf-8") as f:
-        audit = json.load(f)
-
-    records = []
-    for block in audit.get("blocks", []):
-        for r in block.get("records", []):
-            if isinstance(r, dict) and r.get("type") != "genesis":
-                records.append(r)
-
-    total        = len(records)
-    valid_hashes = sum(
-        1 for r in records
-        if isinstance(r.get("hash", ""), str) and len(r["hash"]) == 64
-    )
-    completeness = valid_hashes / total if total > 0 else 0.0
-
-    rows = [
-        {
-            "Metric": "Hash Completeness",
-            "Value": f"{completeness*100:.1f}%",
-            "Description": "Fraction of records with valid SHA-256 hash",
-        },
-        {
-            "Metric": "Chain Integrity",
-            "Value": "Valid" if audit.get("chain_integrity_valid") else "INVALID",
-            "Description": "SHA-256 hash chain verification result",
-        },
-        {
-            "Metric": "Total Audit Records",
-            "Value": str(total),
-            "Description": "Model update hashes submitted",
-        },
-        {
-            "Metric": "Chain Length (blocks)",
-            "Value": str(audit.get("chain_length", 0)),
-            "Description": "Number of finalized blocks",
-        },
-    ]
-    df = pd.DataFrame(rows)
-    df.to_csv(results_dir / "table_4_blockchain_results.csv", index=False)
-    logger.info("Table 4 saved (from audit_trail.json)")
-    return df
 
 
 def generate_table_7_overhead(run_dir: Path, results_dir: Path) -> pd.DataFrame:
@@ -510,20 +503,38 @@ def generate_table_7_overhead(run_dir: Path, results_dir: Path) -> pd.DataFrame:
             logger.warning("Could not parse per_round.json for overhead", error=str(e))
 
     rows = [
-        ("Average local training time", local_training,
-         "Per-node computation (5 local epochs, batch size 32)"),
+        (
+            "Average local training time",
+            local_training,
+            "Per-node computation (5 local epochs, batch size 32)",
+        ),
         ("Average aggregation time", "0.0005 s", "Server-side coordination overhead"),
-        ("Average hash computation latency", "0.0007 s",
-         "Local SHA-256 only; not production blockchain latency"),
+        (
+            "Average hash computation latency",
+            "0.0007 s",
+            "Local SHA-256 only; not production blockchain latency",
+        ),
         ("Model payload size", "513 KB", "Per communication round"),
-        ("Differential privacy processing", "~4.6% additional training time",
-         "Acceptable for batch model updates"),
-        ("Secure update transmission", "~6.2% communication overhead",
-         "Depends on update size and encryption method"),
-        ("Fairness-aware aggregation", "~3.9% additional aggregation time",
-         "Acceptable for governance-sensitive learning"),
-        ("Human-in-the-loop review", "Variable delay",
-         "Required for high-impact employment decisions"),
+        (
+            "Differential privacy processing",
+            "~4.6% additional training time",
+            "Acceptable for batch model updates",
+        ),
+        (
+            "Secure update transmission",
+            "~6.2% communication overhead",
+            "Depends on update size and encryption method",
+        ),
+        (
+            "Fairness-aware aggregation",
+            "~3.9% additional aggregation time",
+            "Acceptable for governance-sensitive learning",
+        ),
+        (
+            "Human-in-the-loop review",
+            "Variable delay",
+            "Required for high-impact employment decisions",
+        ),
     ]
     df = pd.DataFrame(rows, columns=["Component", "Observed value", "Comment"])
     df.to_csv(results_dir / "table_7_overhead.csv", index=False)
@@ -538,63 +549,67 @@ def generate_table_5_agents(
 ) -> pd.DataFrame:
     """Table 5: Agentic AI service evaluation on synthetic test users."""
     from omegaconf import OmegaConf
+
+    from src.agents.accommodation_agent import AccommodationAgent
     from src.agents.employment_agent import EmploymentAgent
     from src.agents.governance_agent import GovernanceAgent
-    from src.agents.upskilling_agent import UpskillingAgent
-    from src.agents.accommodation_agent import AccommodationAgent
     from src.agents.multilingual_agent import MultilingualCommunicationAgent
-    from src.data.synthetic_generator import (
-        generate_user_profiles, generate_job_profiles
-    )
+    from src.agents.upskilling_agent import UpskillingAgent
+    from src.data.synthetic_generator import generate_job_profiles, generate_user_profiles
     from src.utils.seed_utils import get_rng
 
     rng = get_rng(seed)
 
     # Load config defaults (governance threshold τ = 0.65 per paper)
-    cfg = OmegaConf.create({
-        "alpha": 0.40, "beta": 0.25, "gamma": 0.20, "delta": 0.15, "top_k": 10,
-        "top_k_skills": 5, "review_threshold": 0.65,
-    })
+    cfg = OmegaConf.create(
+        {
+            "alpha": 0.40,
+            "beta": 0.25,
+            "gamma": 0.20,
+            "delta": 0.15,
+            "top_k": 10,
+            "top_k_skills": 5,
+            "review_threshold": 0.65,
+        }
+    )
     gov_cfg = OmegaConf.create({"review_threshold": 0.65})
 
-    emp_agent   = EmploymentAgent(cfg, governance_threshold=0.65)
-    gov_agent   = GovernanceAgent(gov_cfg)
-    ups_agent   = UpskillingAgent(cfg, governance_threshold=0.65)
-    acc_agent   = AccommodationAgent(cfg, governance_threshold=0.65)
-    lang_agent  = MultilingualCommunicationAgent(cfg, governance_threshold=0.65)
+    emp_agent = EmploymentAgent(cfg, governance_threshold=0.65)
+    gov_agent = GovernanceAgent(gov_cfg)
+    ups_agent = UpskillingAgent(cfg, governance_threshold=0.65)
+    acc_agent = AccommodationAgent(cfg, governance_threshold=0.65)
+    lang_agent = MultilingualCommunicationAgent(cfg, governance_threshold=0.65)
 
     users = generate_user_profiles("united_states", n_eval_users, rng)
     users = [u for u in users if u.consent_given]
-    jobs  = generate_job_profiles("united_states", 100, rng)
+    jobs = generate_job_profiles("united_states", 100, rng)
 
     emp_scores, gov_detections, gov_fps = [], [], []
     ups_coverages, acc_coverages, lang_adequacies = [], [], []
 
     for user in users[:n_eval_users]:
-        emp_out   = emp_agent.run(user_id=user.user_id, user=user, jobs=jobs)
-        gov_out   = gov_agent.run(
+        emp_out = emp_agent.run(user_id=user.user_id, user=user, jobs=jobs)
+        gov_out = gov_agent.run(
             user_id=user.user_id,
             employment_output=emp_out,
             disability_category=user.disability_category.value,
         )
-        ups_out   = ups_agent.run(
-            user_id=user.user_id, user=user,
-            top_jobs=jobs[: min(10, len(jobs))]
+        ups_out = ups_agent.run(
+            user_id=user.user_id, user=user, top_jobs=jobs[: min(10, len(jobs))]
         )
 
         top_job_profile = None
         if emp_out.recommendations:
             top_job_id = emp_out.recommendations[0].get("job_id")
-            matched    = [j for j in jobs if j.job_id == top_job_id]
+            matched = [j for j in jobs if j.job_id == top_job_id]
             if matched:
                 top_job_profile = matched[0]
 
         if top_job_profile:
-            acc_out = acc_agent.run(
-                user_id=user.user_id, user=user, job=top_job_profile
-            )
+            acc_out = acc_agent.run(user_id=user.user_id, user=user, job=top_job_profile)
             lang_out = lang_agent.run(
-                user_id=user.user_id, user=user,
+                user_id=user.user_id,
+                user=user,
                 job_language=top_job_profile.language_required,
             )
             acc_coverages.append(acc_out.metadata.get("coverage", 0.0))
@@ -602,35 +617,48 @@ def generate_table_5_agents(
 
         emp_scores.append(emp_out.confidence)
         # Governance: high-risk if risk_score > threshold (τ = 0.65 per paper)
-        is_high_risk  = gov_out.risk_score > 0.65
+        is_high_risk = gov_out.risk_score > 0.65
         # We treat low-confidence + multiple disability as ground-truth high-risk
-        gt_high_risk  = (
-            emp_out.confidence < 0.55
-            or user.disability_category.value == "multiple"
-        )
+        gt_high_risk = emp_out.confidence < 0.55 or user.disability_category.value == "multiple"
         if gt_high_risk:
             gov_detections.append(1 if is_high_risk else 0)
         else:
             gov_fps.append(1 if is_high_risk else 0)
 
         if ups_out.recommendations:
-            ups_coverages.append(
-                ups_out.confidence
-            )
+            ups_coverages.append(ups_out.confidence)
 
     rows = [
-        {"Agent": "Employment Matching", "Metric": "Mean Confidence",
-         "Score": round(float(np.mean(emp_scores)), 4)},
-        {"Agent": "Upskilling", "Metric": "Skill Gap Coverage",
-         "Score": round(float(np.mean(ups_coverages)) if ups_coverages else 0.0, 4)},
-        {"Agent": "Accommodation", "Metric": "Accommodation Coverage",
-         "Score": round(float(np.mean(acc_coverages)) if acc_coverages else 0.0, 4)},
-        {"Agent": "Multilingual", "Metric": "Language Adequacy",
-         "Score": round(float(np.mean(lang_adequacies)) if lang_adequacies else 0.0, 4)},
-        {"Agent": "Governance", "Metric": "High-Risk Detection Rate",
-         "Score": round(float(np.mean(gov_detections)) if gov_detections else 0.0, 4)},
-        {"Agent": "Governance", "Metric": "False Positive Rate",
-         "Score": round(float(np.mean(gov_fps)) if gov_fps else 0.0, 4)},
+        {
+            "Agent": "Employment Matching",
+            "Metric": "Mean Confidence",
+            "Score": round(float(np.mean(emp_scores)), 4),
+        },
+        {
+            "Agent": "Upskilling",
+            "Metric": "Skill Gap Coverage",
+            "Score": round(float(np.mean(ups_coverages)) if ups_coverages else 0.0, 4),
+        },
+        {
+            "Agent": "Accommodation",
+            "Metric": "Accommodation Coverage",
+            "Score": round(float(np.mean(acc_coverages)) if acc_coverages else 0.0, 4),
+        },
+        {
+            "Agent": "Multilingual",
+            "Metric": "Language Adequacy",
+            "Score": round(float(np.mean(lang_adequacies)) if lang_adequacies else 0.0, 4),
+        },
+        {
+            "Agent": "Governance",
+            "Metric": "High-Risk Detection Rate",
+            "Score": round(float(np.mean(gov_detections)) if gov_detections else 0.0, 4),
+        },
+        {
+            "Agent": "Governance",
+            "Metric": "False Positive Rate",
+            "Score": round(float(np.mean(gov_fps)) if gov_fps else 0.0, 4),
+        },
     ]
     df = pd.DataFrame(rows)
     df.to_csv(results_dir / "table_5_agent_results.csv", index=False)
@@ -640,13 +668,14 @@ def generate_table_5_agents(
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     args = parse_args()
     setup_logging(level=args.log_level, format="console")
     set_global_seed(args.seed)
 
-    runs_dir    = Path(args.runs_dir)
-    data_dir    = Path(args.data_dir)
+    runs_dir = Path(args.runs_dir)
+    data_dir = Path(args.data_dir)
 
     if args.seed_subdir:
         results_dir = ensure_dir(Path(args.results_dir) / "seeds" / f"seed_{args.seed}")
@@ -662,26 +691,28 @@ def main() -> None:
     # ── Locate simulation run directories ─────────────────────────────────────
     # "Centralized (NN)" prefers the explicit matched-NN run, falling back to the
     # legacy baseline_centralized run name for backward compatibility.
-    centralized_nn_run = (
-        find_run_dir(runs_dir, "baseline_centralized_nn", args.seed)
-        or find_run_dir(runs_dir, "baseline_centralized", args.seed)
-    )
+    centralized_nn_run = find_run_dir(
+        runs_dir, "baseline_centralized_nn", args.seed
+    ) or find_run_dir(runs_dir, "baseline_centralized", args.seed)
     run_map = {
-        "FedAgent-Chain":   find_run_dir(runs_dir, "fedagent_chain_full", args.seed),
-        "Standard FedAvg":  find_run_dir(runs_dir, "ablation_no_fairness", args.seed),
-        "Local Baseline":   find_run_dir(runs_dir, "baseline_local", args.seed),
+        "FedAgent-Chain": find_run_dir(runs_dir, "fedagent_chain_full", args.seed),
+        "Standard FedAvg": find_run_dir(runs_dir, "ablation_no_fairness", args.seed),
+        "Local Baseline": find_run_dir(runs_dir, "baseline_local", args.seed),
         "Centralized (NN)": centralized_nn_run,
     }
 
+    # Drop methods whose run directory is missing so partial pipelines (e.g. a
+    # smoke run with only FedAgent-Chain) still evaluate. FedAgent-Chain is
+    # required; everything else is optional.
     missing = [k for k, v in run_map.items() if v is None]
     if missing:
-        logger.error(
-            "Run directories not found — execute simulations first",
-            missing=missing,
-        )
+        logger.warning("Run directories not found — skipping those methods", missing=missing)
+        run_map = {k: v for k, v in run_map.items() if v is not None}
+
+    if "FedAgent-Chain" not in run_map:
         raise FileNotFoundError(
-            f"Missing run directories for: {missing}\n"
-            "Run: python scripts/run_federated_simulation.py (and run_baselines.py)"
+            "No FedAgent-Chain run directory found.\n"
+            "Run: python scripts/run_federated_simulation.py first."
         )
 
     for method, run_dir in run_map.items():
@@ -692,23 +723,34 @@ def main() -> None:
     if not nn_cfg.exists():
         nn_cfg = Path("configs/experiment/baseline_centralized.yaml")
     cfg_map = {
-        "FedAgent-Chain":   Path("configs/experiment/fedagent_chain_full.yaml"),
-        "Standard FedAvg":  Path("configs/experiment/ablation/no_fairness.yaml"),
-        "Local Baseline":   Path("configs/experiment/baseline_local.yaml"),
+        "FedAgent-Chain": Path("configs/experiment/fedagent_chain_full.yaml"),
+        "Standard FedAvg": Path("configs/experiment/ablation/no_fairness.yaml"),
+        "Local Baseline": Path("configs/experiment/baseline_local.yaml"),
         "Centralized (NN)": nn_cfg,
     }
 
     models: dict[str, object] = {}
     for method_name, run_dir in run_map.items():
         logger.info("Loading model", method=method_name, run_dir=str(run_dir))
-        models[method_name] = load_model_from_checkpoint(
-            run_dir, cfg_map[method_name]
+        try:
+            models[method_name] = load_model_from_checkpoint(run_dir, cfg_map[method_name])
+        except Exception as e:  # noqa: BLE001 — skip incompatible/old checkpoints
+            logger.warning(
+                "Skipping method: checkpoint failed to load",
+                method=method_name,
+                error=str(e),
+            )
+
+    if "FedAgent-Chain" not in models:
+        raise FileNotFoundError(
+            "FedAgent-Chain checkpoint could not be loaded; cannot continue evaluation."
         )
 
     # ── Centralized (LR) baseline — scikit-learn on pooled features ────────────
     # No checkpoint needed: fit inline on the pooled training split.
     try:
         from src.models.baselines import train_centralized_lr
+
         logger.info("Training Centralized (LR) baseline on pooled data...")
         pooled_train = build_pooled_training_dataset(args.seed, data_dir)
         models["Centralized (LR)"] = train_centralized_lr(pooled_train, seed=args.seed)
@@ -726,7 +768,7 @@ def main() -> None:
     t4 = generate_table_4_blockchain(run_map["FedAgent-Chain"], results_dir)
 
     logger.info("Generating Table 7 (overhead)...")
-    t7 = generate_table_7_overhead(run_map["FedAgent-Chain"], results_dir)
+    generate_table_7_overhead(run_map["FedAgent-Chain"], results_dir)
 
     logger.info("Generating Table 5 (agentic AI services)...")
     t5 = generate_table_5_agents(args.seed, results_dir)

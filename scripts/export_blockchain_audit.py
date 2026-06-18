@@ -23,8 +23,12 @@ logger = get_logger("export_blockchain_audit")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export blockchain audit log.")
-    parser.add_argument("--run-dir", type=str, default="experiments/runs/",
-                        help="Run directory containing blockchain_logs/.")
+    parser.add_argument(
+        "--run-dir",
+        type=str,
+        default="experiments/runs/",
+        help="Run directory containing blockchain_logs/.",
+    )
     parser.add_argument("--output-dir", type=str, default="experiments/results/")
     return parser.parse_args()
 
@@ -65,19 +69,22 @@ def main() -> None:
 
     # Save a summary CSV
     import pandas as pd
+
     records = []
     for block in audit_data.get("blocks", []):
         for r in block.get("records", []):
             if isinstance(r, dict) and "hash" in r:
-                records.append({
-                    "block_index": block["block_index"],
-                    "node_id": r.get("node_id", ""),
-                    "round_number": r.get("round_number", 0),
-                    "hash_prefix": r.get("hash", "")[:16] + "...",
-                    "status": r.get("status", ""),
-                    "timestamp": r.get("timestamp", ""),
-                    "consent_ref": r.get("consent_ref", ""),
-                })
+                records.append(
+                    {
+                        "block_index": block["block_index"],
+                        "node_id": r.get("node_id", ""),
+                        "round_number": r.get("round_number", 0),
+                        "hash_prefix": r.get("hash", "")[:16] + "...",
+                        "status": r.get("status", ""),
+                        "timestamp": r.get("timestamp", ""),
+                        "consent_ref": r.get("consent_ref", ""),
+                    }
+                )
 
     if records:
         df = pd.DataFrame(records)
@@ -86,6 +93,7 @@ def main() -> None:
         print(f"  CSV exported      : {out_csv}")
 
     import shutil
+
     out_json = output_dir / "blockchain_audit_full.json"
     shutil.copy(audit_path, out_json)
     print(f"  JSON exported     : {out_json}")

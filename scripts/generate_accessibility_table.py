@@ -18,11 +18,11 @@ logger = get_logger("generate_accessibility_table")
 # accessibility_inclusion. Baseline = conventional centralized job platform.
 ACCESSIBILITY_INDICATORS = [
     ("Accessible job recommendation coverage", 61.4, 84.7),
-    ("Accommodation-aware recommendations",    48.9, 86.2),
-    ("Multilingual support availability",      55.3, 88.5),
-    ("Human-reviewed high-risk decisions",     22.1, 91.3),
-    ("User-facing explanation availability",   39.8, 87.6),
-    ("Training pathway personalization",       52.7, 82.4),
+    ("Accommodation-aware recommendations", 48.9, 86.2),
+    ("Multilingual support availability", 55.3, 88.5),
+    ("Human-reviewed high-risk decisions", 22.1, 91.3),
+    ("User-facing explanation availability", 39.8, 87.6),
+    ("Training pathway personalization", 52.7, 82.4),
 ]
 
 
@@ -55,8 +55,7 @@ def main() -> None:
     print("\nTable — Accessibility & Inclusion Outcomes")
     print(df.to_string(index=False))
     print(
-        "\nNote: architectural design properties (paper), not multi-seed "
-        "empirical measurements."
+        "\nNote: architectural design properties (paper), not multi-seed " "empirical measurements."
     )
 
 

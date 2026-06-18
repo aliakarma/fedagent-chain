@@ -28,7 +28,9 @@ logger = get_logger("run_ablation_study")
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run FedAgent-Chain ablation studies.")
     parser.add_argument(
-        "--ablation-configs", type=str, default="configs/experiment/ablation/",
+        "--ablation-configs",
+        type=str,
+        default="configs/experiment/ablation/",
         help="Directory containing ablation YAML files.",
     )
     parser.add_argument("--seed", type=int, default=42)
@@ -56,13 +58,17 @@ def main() -> None:
         logger.info("Starting ablation", ablation=ablation_name)
 
         import subprocess
+
         result = subprocess.run(
             [
                 sys.executable,
                 "scripts/run_federated_simulation.py",
-                "--config", str(config_path),
-                "--seed", str(args.seed),
-                "--output-dir", str(output_dir),
+                "--config",
+                str(config_path),
+                "--seed",
+                str(args.seed),
+                "--output-dir",
+                str(output_dir),
                 "--no-mlflow",
             ],
             capture_output=False,

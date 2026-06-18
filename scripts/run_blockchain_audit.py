@@ -47,9 +47,13 @@ def run_unauthorized_update_experiment(n_invalid: int = 30, seed: int = 42) -> t
         else:
             consent_valid, access_allowed, within_window = False, rng.random() > 0.5, True
         rec = bc.submit_with_validation(
-            protected_update=update, node_id=f"rogue_{i}", round_number=i,
-            consent_ref="", policy_ref="policy_none",
-            consent_valid=consent_valid, access_allowed=access_allowed,
+            protected_update=update,
+            node_id=f"rogue_{i}",
+            round_number=i,
+            consent_ref="",
+            policy_ref="policy_none",
+            consent_valid=consent_valid,
+            access_allowed=access_allowed,
             within_time_window=within_window,
         )
         if rec is None:
@@ -68,7 +72,9 @@ def measure_hash_latency(n: int = 1000, seed: int = 42) -> float:
     return (time.perf_counter() - start) / n
 
 
-def generate_blockchain_tables(results_dir: Path, seed: int = 42) -> tuple[pd.DataFrame, pd.DataFrame]:
+def generate_blockchain_tables(
+    results_dir: Path, seed: int = 42
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     rejected, total = run_unauthorized_update_experiment(seed=seed)
     rejection_rate = rejected / total
     # The local hash microbenchmark is hardware-dependent; the paper reports
@@ -80,19 +86,37 @@ def generate_blockchain_tables(results_dir: Path, seed: int = 42) -> tuple[pd.Da
 
     rows = [
         ("Model-update hash logging", "100%", "All submitted updates were traceable"),
-        ("Consent validation before update", "100%", "No update accepted without consent reference"),
+        (
+            "Consent validation before update",
+            "100%",
+            "No update accepted without consent reference",
+        ),
         ("Aggregation event logging", "100%", "All federated rounds generated audit records"),
-        ("Unauthorized update rejection", f"{rejection_rate*100:.1f}% ({rejected}/{total})",
-         "One failure due to timestamp validation window artifact"),
-        ("Average hash computation latency", PAPER_HASH_LATENCY,
-         "Local cryptographic overhead only (not production blockchain latency)"),
-        ("Raw disability data stored on-chain", "0%", "No personal disability records stored on blockchain"),
+        (
+            "Unauthorized update rejection",
+            f"{rejection_rate*100:.1f}% ({rejected}/{total})",
+            "One failure due to timestamp validation window artifact",
+        ),
+        (
+            "Average hash computation latency",
+            PAPER_HASH_LATENCY,
+            "Local cryptographic overhead only (not production blockchain latency)",
+        ),
+        (
+            "Raw disability data stored on-chain",
+            "0%",
+            "No personal disability records stored on blockchain",
+        ),
     ]
     df = pd.DataFrame(rows, columns=["Audit indicator", "Observed value", "Interpretation"])
     out = results_dir / "table_4_blockchain_results.csv"
     df.to_csv(out, index=False)
-    logger.info("Blockchain results table saved", path=str(out),
-                rejection=f"{rejected}/{total}", local_hash_latency_s=round(local_latency, 6))
+    logger.info(
+        "Blockchain results table saved",
+        path=str(out),
+        rejection=f"{rejected}/{total}",
+        local_hash_latency_s=round(local_latency, 6),
+    )
 
     life_df = pd.DataFrame(LIFECYCLE_PHASES, columns=["Transaction phase", "latency"])
     life_out = results_dir / "table_blockchain_lifecycle.csv"

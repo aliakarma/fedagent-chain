@@ -19,7 +19,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from datetime import datetime
@@ -28,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from src.blockchain.chain import PermissionedBlockchain
 from src.data.dataset import EmploymentDataset
@@ -50,33 +49,44 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--config", type=str,
+        "--config",
+        type=str,
         default="configs/experiment/fedagent_chain_full.yaml",
         help="Experiment configuration YAML.",
     )
     parser.add_argument("--seed", type=int, default=42, help="Global random seed.")
     parser.add_argument(
-        "--data-dir", type=str, default="data/synthetic/",
+        "--data-dir",
+        type=str,
+        default="data/synthetic/",
         help="Directory containing synthetic data CSVs.",
     )
     parser.add_argument(
-        "--output-dir", type=str, default=None,
+        "--output-dir",
+        type=str,
+        default=None,
         help="Output directory for results. Auto-named if not provided.",
     )
     parser.add_argument(
-        "--no-fairness", action="store_true",
+        "--no-fairness",
+        action="store_true",
         help="Disable fairness-aware aggregation (use standard FedAvg).",
     )
     parser.add_argument(
-        "--no-mlflow", action="store_true",
+        "--no-mlflow",
+        action="store_true",
         help="Disable MLflow experiment tracking.",
     )
     parser.add_argument(
-        "--override", nargs="*", default=[],
+        "--override",
+        nargs="*",
+        default=[],
         help="Override config values as key=value pairs.",
     )
     parser.add_argument(
-        "--log-level", type=str, default="INFO",
+        "--log-level",
+        type=str,
+        default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
     return parser.parse_args()
@@ -104,9 +114,7 @@ def load_node_dataset(
         data = generate_synthetic_node_data(
             node_id=node_id, n_users=2500, n_jobs=1250, n_pairs=12500, seed=seed
         )
-        users_df, jobs_df, outcomes_df = (
-            data["users"], data["jobs"], data["outcomes"]
-        )
+        users_df, jobs_df, outcomes_df = (data["users"], data["jobs"], data["outcomes"])
 
     full_dataset = EmploymentDataset(
         outcomes_df=outcomes_df,
@@ -115,16 +123,16 @@ def load_node_dataset(
         consent_filter=True,
     )
 
-    fairness_cfg     = cfg.get("fairness", {})
+    fairness_cfg = cfg.get("fairness", {})
     fairness_enabled = bool(fairness_cfg.get("enabled", True))
 
     if fairness_enabled:
-        group_labels    = full_dataset.get_group_labels("disability_category")
-        sample_weights  = fairness_reweight_samples(group_labels)
+        group_labels = full_dataset.get_group_labels("disability_category")
+        sample_weights = fairness_reweight_samples(group_labels)
         # Rebuild full_dataset with weights
-        users_df_reset  = full_dataset.users_df.reset_index()
-        jobs_df_reset   = full_dataset.jobs_df.reset_index()
-        full_dataset    = EmploymentDataset(
+        users_df_reset = full_dataset.users_df.reset_index()
+        jobs_df_reset = full_dataset.jobs_df.reset_index()
+        full_dataset = EmploymentDataset(
             outcomes_df=full_dataset.outcomes,
             users_df=users_df_reset,
             jobs_df=jobs_df_reset,
@@ -166,23 +174,37 @@ def main() -> None:
         data_dir=Path(args.data_dir),
         use_fairness=use_fairness,
         use_mlflow=use_mlflow,
-        run_name=run_name
+        run_name=run_name,
     )
 
 
-def pool_node_datasets(all_train_ds: list[EmploymentDataset], all_test_ds: list[EmploymentDataset]) -> tuple[EmploymentDataset, EmploymentDataset]:
+def pool_node_datasets(
+    all_train_ds: list[EmploymentDataset], all_test_ds: list[EmploymentDataset]
+) -> tuple[EmploymentDataset, EmploymentDataset]:
     """Combine datasets from multiple nodes into single pooled train/test sets."""
     # Combine into single pooled datasets
     pooled_train_outcomes = pd.concat([ds.outcomes for ds in all_train_ds], ignore_index=True)
-    pooled_train_users = pd.concat([ds.users_df.reset_index() for ds in all_train_ds]).drop_duplicates("user_id")
-    pooled_train_jobs = pd.concat([ds.jobs_df.reset_index() for ds in all_train_ds]).drop_duplicates("job_id")
-    
-    pooled_test_outcomes = pd.concat([ds.outcomes for ds in all_test_ds], ignore_index=True)
-    pooled_test_users = pd.concat([ds.users_df.reset_index() for ds in all_test_ds]).drop_duplicates("user_id")
-    pooled_test_jobs = pd.concat([ds.jobs_df.reset_index() for ds in all_test_ds]).drop_duplicates("job_id")
+    pooled_train_users = pd.concat(
+        [ds.users_df.reset_index() for ds in all_train_ds]
+    ).drop_duplicates("user_id")
+    pooled_train_jobs = pd.concat(
+        [ds.jobs_df.reset_index() for ds in all_train_ds]
+    ).drop_duplicates("job_id")
 
-    train_ds = EmploymentDataset(pooled_train_outcomes, pooled_train_users, pooled_train_jobs, consent_filter=False)
-    test_ds = EmploymentDataset(pooled_test_outcomes, pooled_test_users, pooled_test_jobs, consent_filter=False)
+    pooled_test_outcomes = pd.concat([ds.outcomes for ds in all_test_ds], ignore_index=True)
+    pooled_test_users = pd.concat(
+        [ds.users_df.reset_index() for ds in all_test_ds]
+    ).drop_duplicates("user_id")
+    pooled_test_jobs = pd.concat([ds.jobs_df.reset_index() for ds in all_test_ds]).drop_duplicates(
+        "job_id"
+    )
+
+    train_ds = EmploymentDataset(
+        pooled_train_outcomes, pooled_train_users, pooled_train_jobs, consent_filter=False
+    )
+    test_ds = EmploymentDataset(
+        pooled_test_outcomes, pooled_test_users, pooled_test_jobs, consent_filter=False
+    )
     return train_ds, test_ds
 
 
@@ -193,10 +215,10 @@ def run_simulation_from_config(
     data_dir: Path,
     use_fairness: bool = True,
     use_mlflow: bool = False,
-    run_name: Optional[str] = None
-) -> Dict:
+    run_name: str | None = None,
+) -> dict:
     """Run the federated simulation from a config object.
-    
+
     Programmatic entry point used by run_baselines.py and tests.
     """
     if run_name is None:
@@ -227,15 +249,13 @@ def run_simulation_from_config(
         all_train_ds = []
         all_test_ds = []
         for i, node_id in enumerate(nodes):
-            train_ds, test_ds = load_node_dataset(
-                node_id, data_dir, cfg, seed=seed + i * 1000
-            )
+            train_ds, test_ds = load_node_dataset(node_id, data_dir, cfg, seed=seed + i * 1000)
             all_train_ds.append(train_ds)
             all_test_ds.append(test_ds)
-        
+
         # Combine into single pooled datasets
         train_ds, test_ds = pool_node_datasets(all_train_ds, all_test_ds)
-        
+
         client = FederatedClient(
             node_id="centralized_node",
             train_dataset=train_ds,
@@ -248,9 +268,7 @@ def run_simulation_from_config(
         logger.info("Centralized client created", n_train=len(train_ds), n_test=len(test_ds))
     else:
         for i, node_id in enumerate(nodes):
-            train_ds, test_ds = load_node_dataset(
-                node_id, data_dir, cfg, seed=seed + i * 1000
-            )
+            train_ds, test_ds = load_node_dataset(node_id, data_dir, cfg, seed=seed + i * 1000)
             client = FederatedClient(
                 node_id=node_id,
                 train_dataset=train_ds,
@@ -272,6 +290,7 @@ def run_simulation_from_config(
         mlflow_uri = cfg.get("tracking", {}).get("mlflow_tracking_uri", "http://localhost:5000")
         try:
             import mlflow
+
             mlflow.set_tracking_uri(mlflow_uri)
             mlflow.set_experiment(exp_name)
             mlflow.start_run(run_name=run_name)
@@ -313,10 +332,12 @@ def run_simulation_from_config(
             output_dir=str(output_dir),
         )
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print(f" [OK] Simulation complete: {run_name}")
-        print("="*60)
-        print(f"  Best F1        : {results.get('best_f1', 0.0):.4f} (round {results.get('best_f1_round', 0)})")
+        print("=" * 60)
+        print(
+            f"  Best F1        : {results.get('best_f1', 0.0):.4f} (round {results.get('best_f1_round', 0)})"
+        )
         print(f"  Total rounds   : {results.get('convergence_rounds', 0)}")
         print(f"  Duration       : {total_duration:.1f}s")
         print(f"  Comm. Volume   : {results.get('total_communication_volume_mb', 0.0):.2f} MB")
@@ -324,12 +345,13 @@ def run_simulation_from_config(
         if blockchain_enabled:
             print(f"  Blockchain records: {blockchain.get_record_count()}")
             print(f"  Hash completeness : {blockchain.get_hash_completeness():.1%}")
-        print("="*60 + "\n")
+        print("=" * 60 + "\n")
 
     finally:
         if use_mlflow:
             try:
                 import mlflow
+
                 mlflow.end_run()
             except Exception:
                 pass
