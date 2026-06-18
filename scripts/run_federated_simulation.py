@@ -27,7 +27,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import mlflow
 import pandas as pd
 from omegaconf import OmegaConf
 
@@ -272,12 +271,13 @@ def run_simulation_from_config(
         exp_name = cfg.get("experiment", {}).get("name", "fedagent_chain")
         mlflow_uri = cfg.get("tracking", {}).get("mlflow_tracking_uri", "http://localhost:5000")
         try:
+            import mlflow
             mlflow.set_tracking_uri(mlflow_uri)
             mlflow.set_experiment(exp_name)
             mlflow.start_run(run_name=run_name)
             mlflow.log_params({"seed": seed, "git_commit": get_git_commit_hash()})
         except Exception as e:
-            logger.warning("MLflow connection failed, continuing without tracking", error=str(e))
+            logger.warning("MLflow unavailable, continuing without tracking", error=str(e))
             use_mlflow = False
 
     try:
@@ -329,6 +329,7 @@ def run_simulation_from_config(
     finally:
         if use_mlflow:
             try:
+                import mlflow
                 mlflow.end_run()
             except Exception:
                 pass
