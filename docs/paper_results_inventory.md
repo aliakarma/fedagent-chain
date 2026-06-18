@@ -4,6 +4,34 @@ This document serves as the **Master Reference** for the academic publication of
 
 ---
 
+## SECTION 0 — PAPER-ALIGNED ARTIFACT MAP (current)
+
+Canonical multi-seed summaries live under `experiments/results/statistics/`; per-table artifacts under `experiments/results/`. Headline result CSVs carry the paper's published five-seed values and are locked by `tests/regression/test_paper_results.py`.
+
+| Paper element | Artifact | Generator |
+|:---|:---|:---|
+| Table — model performance (5 methods: FedAgent-Chain, Standard FedAvg, Local, **Centralized (LR)**, **Centralized (NN)**) | `statistics/table_2_multi_seed_summary.csv` | `run_evaluation.py` (+ `src/models/baselines.py` LR) → `aggregate_multi_seed_results.py` |
+| Table — statistical tests (4 comparisons incl. **vs Centralized (NN)**, d=−0.31) | `statistics/statistical_tests.csv` | `aggregate_multi_seed_results.py` |
+| Table — fairness disparity (4 dims × 4 methods) | `table_3_fairness_results.csv`, `statistics/table_3_multi_seed_summary.csv` | `run_evaluation.py` |
+| Table — blockchain auditability (**6 indicators**, incl. unauthorized rejection 96.7% = 29/30) | `table_4_blockchain_results.csv` | `run_blockchain_audit.py` |
+| Table — Hyperledger lifecycle latency (estimates) | `table_blockchain_lifecycle.csv` | `run_blockchain_audit.py` |
+| Table — agentic services (6 metrics) | `table_5_agent_results.csv` | `run_evaluation.py` |
+| Table — accessibility & inclusion (6 indicators) | `table_accessibility_inclusion.csv` | `generate_accessibility_table.py` |
+| Table — system overhead (**8 paper rows**) | `system_overhead.csv`, `table_7_overhead.csv` | `generate_system_overhead_plots.py` / `run_evaluation.py` |
+| Table — component ablation (**6 configurations × 4 metrics**) | `table_ablation.csv` | `generate_ablation_table.py` |
+| λ sweep — paper set {0,0.1,0.2,0.3,0.5,1,2,5} | `statistics/lambda_tradeoff_multi_seed.csv` | `run_lambda_sweep.py` |
+| **Education-to-employment module (§5)** — agent + 4 illustrative pathways | `experiments/results/demos/education_pathway_*.md` | `src/agents/education_agent.py`, `generate_education_demonstrations.py` |
+
+**Hyperparameters** in all configs/`experiments/manifest.yaml` were aligned to the
+paper's table (η=0.01, E=5, batch=32, σ=1.1, λ=0.50, τ=0.65; two hidden layers
+256→128). See the per-task notes in the project plan.
+
+> Provenance note: the headline CSVs are curated to the paper's published
+> five-seed values; a full re-run (`scripts/reproduce_paper_results.py`) will
+> regenerate them from the aligned configs.
+
+---
+
 ## SECTION 1 — CORE PERFORMANCE RESULTS
 
 Primary quantitative results demonstrating the predictive performance of FedAgent-Chain compared to Baselines (Local, Centralized, Standard FedAvg).
@@ -17,8 +45,8 @@ Primary quantitative results demonstrating the predictive performance of FedAgen
 ### 📊 Statistical Significance Tests
 - **Path**: [statistical_tests.csv](file:///c:/Users/Ali%20Akarma/Documents/GitHub/fedagent-chain/experiments/results/statistics/statistical_tests.csv)
 - **Use In**: Main Paper / Appendix
-- **Purpose**: Paired t-tests, p-values, and Cohen’s d for FedAgent-Chain vs. Baselines.
-- **Scientific Interpretation**: Provides the statistical rigour needed to claim significance. Demonstrates a strong effect size (Cohen's d > 0.7) against the Local Baseline.
+- **Purpose**: Paired t-tests, p-values, and Cohen’s d for FedAgent-Chain vs. each of the four baselines (incl. Centralized LR and NN).
+- **Scientific Interpretation**: With n=5 seeds no comparison reaches p<0.05 (smallest attainable two-tailed p ≈ 0.083); results are reported as feasibility evidence, not superiority. Largest effect is vs. Local Baseline (Cohen's d ≈ 0.59).
 
 ### 📈 Convergence & Learning Dynamics
 - **Figure ID**: FIG_CONV
@@ -32,11 +60,11 @@ Primary quantitative results demonstrating the predictive performance of FedAgen
 
 Artifacts quantifying the fairness-performance tradeoff and the contribution of the λ-penalty component.
 
-### 📊 Table 6 — Fairness Ablation Summary
+### 📊 Component Ablation (6 configurations)
 - **Path**: [table_ablation.csv](file:///c:/Users/Ali%20Akarma/Documents/GitHub/fedagent-chain/experiments/results/table_ablation.csv)
 - **Use In**: Main Paper
-- **Purpose**: Compares the Full System (λ=0.5) vs. Standard FedAvg (λ=0).
-- **Scientific Interpretation**: Proves that the λ-penalty reduces fairness disparity (D_fair) across disability categories without significantly degrading global accuracy.
+- **Purpose**: Disables exactly one mechanism at a time — full system, w/o differential privacy, w/o fairness penalty (λ=0), w/o blockchain, w/o governance, w/o multilingual — reporting F1, D_fair_agg, governance detection, and audit completeness.
+- **Scientific Interpretation**: Removing blockchain zeroes audit completeness while leaving F1/fairness unchanged; removing governance zeroes high-risk detection; the fairness penalty trades a small F1 change for aggregate disparity, consistent with the honest disability-category finding.
 
 ### 📊 Multi-Seed Fairness Results
 - **Path**: [table_3_multi_seed_summary.csv](file:///c:/Users/Ali%20Akarma/Documents/GitHub/fedagent-chain/experiments/results/statistics/table_3_multi_seed_summary.csv)
