@@ -97,3 +97,4 @@ blockchain_storage/
 *.zip
 /verify
 FedAgent_Chain_Remediation_Plan.md
+disable.tex
