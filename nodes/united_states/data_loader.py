@@ -1,1 +1,0 @@
-from src.data.synthetic_generator import generate_synthetic_node_data
