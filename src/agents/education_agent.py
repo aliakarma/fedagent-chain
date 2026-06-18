@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
@@ -34,8 +34,9 @@ class EducationAgent(BaseAgent):
         Risk threshold τ for human-review escalation (default 0.65, paper).
     """
 
-    def __init__(self, agent_cfg: Optional[DictConfig] = None,
-                 governance_threshold: float = 0.65) -> None:
+    def __init__(
+        self, agent_cfg: DictConfig | None = None, governance_threshold: float = 0.65
+    ) -> None:
         cfg = agent_cfg if agent_cfg is not None else OmegaConf.create({})
         super().__init__(cfg, governance_threshold)
         # Priority weights w1..w4
@@ -79,8 +80,12 @@ class EducationAgent(BaseAgent):
         importance = np.asarray(importance, dtype=float)
         accessibility_need = np.asarray(accessibility_need, dtype=float)
         rehab_relevance = np.asarray(rehab_relevance, dtype=float)
-        return (self.w1 * gap + self.w2 * importance
-                + self.w3 * accessibility_need + self.w4 * rehab_relevance)
+        return (
+            self.w1 * gap
+            + self.w2 * importance
+            + self.w3 * accessibility_need
+            + self.w4 * rehab_relevance
+        )
 
     # ── Learning-resource suitability ──────────────────────────────────────────
     def resource_suitability(
@@ -106,7 +111,7 @@ class EducationAgent(BaseAgent):
         target_role: str,
         accessibility_modes: set,
         language: str = "multi",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Select the top-k accessible learning resources for the target role.
 
         Each candidate resource is scored with ``resource_suitability``; the
@@ -118,35 +123,44 @@ class EducationAgent(BaseAgent):
         """
         priority = np.asarray(priority, dtype=float)
         total_priority = float(np.sum(priority)) or 1.0
-        scored: List[Dict[str, Any]] = []
+        scored: list[dict[str, Any]] = []
         for res in LEARNING_RESOURCES:
             idx = [COMPETENCIES.index(c) for c in res["competencies"] if c in COMPETENCIES]
             content = float(np.sum(priority[idx])) / total_priority if idx else 0.0
             role = 1.0 if target_role in res["roles"] else 0.0
             modes = res["accessibility_modes"]
-            acc = (len(modes & accessibility_modes) / len(accessibility_modes)
-                   if accessibility_modes else 1.0)
+            acc = (
+                len(modes & accessibility_modes) / len(accessibility_modes)
+                if accessibility_modes
+                else 1.0
+            )
             lang = 1.0 if res["language"] in ("multi", language) else 0.0
             pref = 1.0  # neutral preference; learner-specific tuning is future work
             score = self.resource_suitability(content, role, acc, lang, pref)
-            scored.append({
-                "resource_id": res["resource_id"],
-                "title": res["title"],
-                "score": round(score, 4),
-                "covers": res["competencies"],
-                "role_aligned": bool(role),
-            })
+            scored.append(
+                {
+                    "resource_id": res["resource_id"],
+                    "title": res["title"],
+                    "score": round(score, 4),
+                    "covers": res["competencies"],
+                    "role_aligned": bool(role),
+                }
+            )
         scored.sort(key=lambda r: r["score"], reverse=True)
         return scored[: self.top_k_resources]
 
     # ── Workplace-readiness evaluation ─────────────────────────────────────────
     def workplace_readiness(
-        self, matching: float, assessment: float,
-        accommodation: float, training: float,
+        self,
+        matching: float,
+        assessment: float,
+        accommodation: float,
+        training: float,
     ) -> float:
         """Readiness W(i,r) = l1*M + l2*AScore + l3*CScore + l4*TScore."""
-        return float(self.l1 * matching + self.l2 * assessment
-                     + self.l3 * accommodation + self.l4 * training)
+        return float(
+            self.l1 * matching + self.l2 * assessment + self.l3 * accommodation + self.l4 * training
+        )
 
     def is_ready(self, readiness: float, target_role: str) -> bool:
         """Return True iff W(i,r) >= b_r for the target role."""
@@ -157,14 +171,14 @@ class EducationAgent(BaseAgent):
     def run(
         self,
         user_id: str,
-        competencies: Optional[List[float]] = None,
-        target_role: Optional[str] = None,
+        competencies: list[float] | None = None,
+        target_role: str | None = None,
         disability_category: str = "cognitive",
         language: str = "multi",
         assessment_score: float = 0.7,
         training_completion: float = 0.7,
         accommodation_compatibility: float = 0.8,
-        rehab_relevance: Optional[List[float]] = None,
+        rehab_relevance: list[float] | None = None,
         **kwargs: Any,
     ) -> AgentOutput:
         """Generate an accessible job-readiness pathway and readiness decision.
@@ -185,7 +199,9 @@ class EducationAgent(BaseAgent):
                 f"target_role must be one of {list(JOB_ROLE_REQUIREMENTS)}; got {target_role!r}"
             )
         if competencies is None:
-            raise ValueError("EducationAgent requires the learner competency vector 'competencies'.")
+            raise ValueError(
+                "EducationAgent requires the learner competency vector 'competencies'."
+            )
         s_i = np.asarray(competencies, dtype=float)
         if s_i.shape[0] != N_COMPETENCIES:
             raise ValueError(f"competencies must have length {N_COMPETENCIES}, got {s_i.shape[0]}")
@@ -208,8 +224,11 @@ class EducationAgent(BaseAgent):
             for c in ("task_accuracy", "attention_to_detail", "workplace_behavior"):
                 access_need[COMPETENCIES.index(c)] = 1.0
 
-        rehab = (np.asarray(rehab_relevance, dtype=float)
-                 if rehab_relevance is not None else np.zeros(N_COMPETENCIES))
+        rehab = (
+            np.asarray(rehab_relevance, dtype=float)
+            if rehab_relevance is not None
+            else np.zeros(N_COMPETENCIES)
+        )
 
         priority = self.competency_priority(gap, importance, access_need, rehab)
         pathway = self.recommend_pathway(priority, target_role, modes, language)
@@ -228,9 +247,13 @@ class EducationAgent(BaseAgent):
         risk = self._compute_base_risk_score(confidence, disability_category)
 
         top_gaps = [
-            {"competency": COMPETENCIES[j], "gap": round(float(gap[j]), 3),
-             "priority": round(float(priority[j]), 3)}
-            for j in np.argsort(priority)[::-1] if gap[j] > 0
+            {
+                "competency": COMPETENCIES[j],
+                "gap": round(float(gap[j]), 3),
+                "priority": round(float(priority[j]), 3),
+            }
+            for j in np.argsort(priority)[::-1]
+            if gap[j] > 0
         ][: self.top_k_resources]
 
         explanation = (

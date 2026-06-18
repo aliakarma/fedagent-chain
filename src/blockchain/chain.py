@@ -18,10 +18,9 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -38,7 +37,7 @@ class Block:
     block_index: int
     previous_hash: str
     timestamp: str
-    records: List[Dict]
+    records: list[dict]
     nonce: int = 0
     block_hash: str = field(default="", init=False)
 
@@ -89,13 +88,13 @@ class PermissionedBlockchain:
     def __init__(
         self,
         records_per_block: int = 10,
-        storage_path: Optional[str | Path] = None,
+        storage_path: str | Path | None = None,
     ) -> None:
         self.records_per_block = records_per_block
         self.storage_path = Path(storage_path) if storage_path else None
-        self._chain: List[Block] = []
-        self._pending_records: List[Dict] = []
-        self._all_records: List[BlockchainRecord] = []
+        self._chain: list[Block] = []
+        self._pending_records: list[dict] = []
+        self._all_records: list[BlockchainRecord] = []
 
         # Create genesis block
         self._create_genesis_block()
@@ -136,7 +135,7 @@ class PermissionedBlockchain:
         # Hash the raw bytes of the protected update
         update_hash = hashlib.sha256(protected_update.tobytes()).hexdigest()
         # Combine with node ID and round number
-        combined = f"{update_hash}{node_id}{round_number}".encode("utf-8")
+        combined = f"{update_hash}{node_id}{round_number}".encode()
         return hashlib.sha256(combined).hexdigest()
 
     def submit_model_update_hash(
@@ -225,7 +224,7 @@ class PermissionedBlockchain:
         consent_valid: bool,
         access_allowed: bool,
         within_time_window: bool = True,
-    ) -> Optional[BlockchainRecord]:
+    ) -> BlockchainRecord | None:
         """Validate an update via the smart contract, then log it if accepted.
 
         Returns the created :class:`BlockchainRecord` when accepted, or ``None``
@@ -295,7 +294,7 @@ class PermissionedBlockchain:
             risk_score=risk_score,
             action=reviewer_action,
         )
-        return record["record_id"]
+        return str(record["record_id"])
 
     def _finalize_block(self) -> Block:
         """Create a new block with all pending records."""
@@ -354,7 +353,7 @@ class PermissionedBlockchain:
         """Return total number of submitted audit records."""
         return len(self._all_records)
 
-    def get_all_records(self) -> List[BlockchainRecord]:
+    def get_all_records(self) -> list[BlockchainRecord]:
         """Return all model update hash records."""
         return self._all_records.copy()
 
@@ -407,8 +406,5 @@ class PermissionedBlockchain:
         """
         if not self._all_records:
             return 0.0
-        valid = sum(
-            1 for r in self._all_records
-            if len(r.hash) == 64 and r.status == "accepted"
-        )
+        valid = sum(1 for r in self._all_records if len(r.hash) == 64 and r.status == "accepted")
         return valid / len(self._all_records)

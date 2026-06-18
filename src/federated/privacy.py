@@ -10,8 +10,6 @@ clipping threshold C, and the number of federated rounds T.
 
 from __future__ import annotations
 
-from typing import Dict
-
 import numpy as np
 
 from src.utils.logging_utils import get_logger
@@ -151,11 +149,11 @@ def protect_update(
 
 
 def protect_state_dict(
-    state_dict: Dict[str, np.ndarray],
+    state_dict: dict[str, np.ndarray],
     C: float,
     sigma: float,
     seed: int | None = None,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """Apply DP protection to all parameters in a state dictionary.
 
     Parameters

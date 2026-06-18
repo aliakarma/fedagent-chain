@@ -5,16 +5,15 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-
 # FedAgent-Chain brand color palette
 COLORS = {
-    "fedagent": "#2563EB",      # Primary blue — FedAgent-Chain full model
-    "baseline_local": "#DC2626",    # Red — local-only baseline
+    "fedagent": "#2563EB",  # Primary blue — FedAgent-Chain full model
+    "baseline_local": "#DC2626",  # Red — local-only baseline
     "baseline_central": "#16A34A",  # Green — centralized baseline
-    "fairness": "#7C3AED",          # Purple — fairness-aware variant
-    "no_blockchain": "#EA580C",     # Orange — ablation (no blockchain)
-    "no_governance": "#0891B2",     # Cyan — ablation (no governance)
-    "accent": "#F59E0B",            # Amber — accent highlights
+    "fairness": "#7C3AED",  # Purple — fairness-aware variant
+    "no_blockchain": "#EA580C",  # Orange — ablation (no blockchain)
+    "no_governance": "#0891B2",  # Cyan — ablation (no governance)
+    "accent": "#F59E0B",  # Amber — accent highlights
 }
 
 # Consistent figure sizes (width, height) in inches
@@ -33,22 +32,24 @@ NODE_COLORS = {
 
 def apply_fedagent_style() -> None:
     """Apply the FedAgent-Chain publication-grade matplotlib style."""
-    plt.rcParams.update({
-        "figure.dpi": 150,
-        "savefig.dpi": 300,
-        "font.family": "serif",
-        "font.size": 11,
-        "axes.titlesize": 13,
-        "axes.labelsize": 12,
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
-        "legend.fontsize": 10,
-        "lines.linewidth": 2.0,
-        "axes.grid": True,
-        "grid.alpha": 0.3,
-        "grid.linestyle": "--",
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "figure.constrained_layout.use": True,
-    })
+    plt.rcParams.update(
+        {
+            "figure.dpi": 150,
+            "savefig.dpi": 300,
+            "font.family": "serif",
+            "font.size": 11,
+            "axes.titlesize": 13,
+            "axes.labelsize": 12,
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "legend.fontsize": 10,
+            "lines.linewidth": 2.0,
+            "axes.grid": True,
+            "grid.alpha": 0.3,
+            "grid.linestyle": "--",
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "figure.constrained_layout.use": True,
+        }
+    )
     sns.set_palette(list(COLORS.values()))

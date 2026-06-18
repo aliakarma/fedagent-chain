@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.visualization.styles import apply_fedagent_style, FIGSIZE_DOUBLE, NODE_COLORS
+from src.visualization.styles import FIGSIZE_DOUBLE, apply_fedagent_style
 
 
 def plot_node_performance(
-    node_metrics: Dict[str, Dict[str, float]],
-    node_stds: Optional[Dict[str, Dict[str, float]]] = None,
+    node_metrics: dict[str, dict[str, float]],
+    node_stds: dict[str, dict[str, float]] | None = None,
     metric: str = "f1",
     title: str = "Per-Node F1 Score by Experimental Setting",
-    output_path: Optional[str | Path] = None,
+    output_path: str | Path | None = None,
     show: bool = False,
 ) -> plt.Figure:
     """Plot grouped bar chart of per-node performance across experiment settings.
@@ -59,20 +58,33 @@ def plot_node_performance(
 
     for i, exp_name in enumerate(experiment_names):
         values = [node_metrics[exp_name].get(node, 0.0) for node in nodes]
-        stds   = [node_stds[exp_name].get(node, 0.0) for node in nodes] if node_stds and exp_name in node_stds else None
-        
+        stds = (
+            [node_stds[exp_name].get(node, 0.0) for node in nodes]
+            if node_stds and exp_name in node_stds
+            else None
+        )
+
         offset = (i - n_experiments / 2 + 0.5) * bar_width
         bars = ax.bar(
-            x + offset, values, width=bar_width, label=exp_name,
-            yerr=stds, capsize=3, error_kw={"elinewidth": 1, "ecolor": "black"},
-            alpha=0.85, edgecolor="white", linewidth=0.5,
+            x + offset,
+            values,
+            width=bar_width,
+            label=exp_name,
+            yerr=stds,
+            capsize=3,
+            error_kw={"elinewidth": 1, "ecolor": "black"},
+            alpha=0.85,
+            edgecolor="white",
+            linewidth=0.5,
         )
-        for bar, val in zip(bars, values):
+        for bar, val in zip(bars, values, strict=False):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height() + 0.005,
                 f"{val:.3f}",
-                ha="center", va="bottom", fontsize=7.5,
+                ha="center",
+                va="bottom",
+                fontsize=7.5,
             )
 
     node_display = [n.replace("_", "\n").title() for n in nodes]

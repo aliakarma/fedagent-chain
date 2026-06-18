@@ -8,8 +8,6 @@ Implements the full evaluation suite from Section 5 of the paper:
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
@@ -17,7 +15,7 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 def compute_classification_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute standard binary classification metrics.
 
     Parameters
@@ -116,8 +114,8 @@ def recall_at_k(
 def compute_ranking_metrics(
     y_true: np.ndarray,
     y_scores: np.ndarray,
-    k_values: List[int] = [5, 10],
-) -> Dict[str, float]:
+    k_values: list[int] | None = None,
+) -> dict[str, float]:
     """Compute Precision@K and Recall@K for multiple K values.
 
     Parameters
@@ -134,6 +132,8 @@ def compute_ranking_metrics(
     dict
         Metrics with keys like 'precision_at_5', 'recall_at_10', etc.
     """
+    if k_values is None:
+        k_values = [5, 10]
     metrics = {}
     for k in k_values:
         metrics[f"precision_at_{k}"] = precision_at_k(y_true, y_scores, k)
@@ -145,8 +145,8 @@ def compute_full_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     y_scores: np.ndarray | None = None,
-    k_values: List[int] = [5, 10],
-) -> Dict[str, float]:
+    k_values: list[int] | None = None,
+) -> dict[str, float]:
     """Compute the complete evaluation metric set for FedAgent-Chain.
 
     Parameters
@@ -165,6 +165,8 @@ def compute_full_metrics(
     dict
         All metrics including classification and ranking metrics.
     """
+    if k_values is None:
+        k_values = [5, 10]
     metrics = compute_classification_metrics(y_true, y_pred)
 
     if y_scores is not None:
@@ -175,8 +177,8 @@ def compute_full_metrics(
 
 
 def aggregate_metrics_across_nodes(
-    node_metrics: Dict[str, Dict[str, float]],
-) -> Dict[str, float]:
+    node_metrics: dict[str, dict[str, float]],
+) -> dict[str, float]:
     """Aggregate per-node metrics to global statistics.
 
     Parameters
@@ -189,8 +191,8 @@ def aggregate_metrics_across_nodes(
     dict
         Aggregated metrics with mean and std across nodes.
     """
-    all_values: Dict[str, List[float]] = {}
-    for node_id, m in node_metrics.items():
+    all_values: dict[str, list[float]] = {}
+    for _node_id, m in node_metrics.items():
         for metric_name, value in m.items():
             all_values.setdefault(metric_name, []).append(value)
 

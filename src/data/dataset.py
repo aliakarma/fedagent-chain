@@ -2,21 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
-
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from src.data.schema import (
-    DisabilityCategory,
-    EducationLevel,
-    EmploymentGoal,
-    NodeID,
-    WorkMode,
-)
-
+from src.data.schema import DisabilityCategory, EmploymentGoal, NodeID, WorkMode
 
 # One-hot encoding mappings
 DISABILITY_CATEGORIES = [c.value for c in DisabilityCategory]
@@ -28,7 +19,7 @@ NODE_IDS = [n.value for n in NodeID]
 KNOWN_LANGUAGES = ["ar", "en", "zh", "fr", "de", "es", "ur", "tl", "yue"]
 
 
-def encode_categorical(value: str, categories: List[str]) -> List[float]:
+def encode_categorical(value: str, categories: list[str]) -> list[float]:
     """One-hot encode a categorical value.
 
     Parameters
@@ -78,12 +69,14 @@ def encode_user_job_pair(
     np.ndarray
         Feature vector of shape (91,).
     """
+
     # Parse list columns (stored as strings in CSV)
-    def parse_list(val: object) -> List[int]:
+    def parse_list(val: object) -> list[int]:
         if isinstance(val, list):
             return [int(x) for x in val]
         if isinstance(val, str):
             import ast
+
             return [int(x) for x in ast.literal_eval(val)]
         return []
 
@@ -98,31 +91,29 @@ def encode_user_job_pair(
     disability_ohe = encode_categorical(
         str(user_row.get("disability_category", "")), DISABILITY_CATEGORIES
     )
-    work_mode_ohe = encode_categorical(
-        str(user_row.get("preferred_work_mode", "")), WORK_MODES
-    )
+    work_mode_ohe = encode_categorical(str(user_row.get("preferred_work_mode", "")), WORK_MODES)
     edu_level = int(user_row.get("education_level", 0))
     education_ohe = [0.0] * 5
     if 0 <= edu_level <= 4:
         education_ohe[edu_level] = 1.0
 
-    goal_ohe = encode_categorical(
-        str(user_row.get("employment_goal", "")), EMPLOYMENT_GOALS
-    )
+    goal_ohe = encode_categorical(str(user_row.get("employment_goal", "")), EMPLOYMENT_GOALS)
 
     lang_match = [
         1.0 if user_row.get("language_primary") == job_row.get("language_required") else 0.0
     ]
 
-    feature_vector = np.concatenate([
-        skill_overlap,      # 50
-        accom_coverage,     # 20
-        disability_ohe,     # 8
-        work_mode_ohe,      # 3
-        education_ohe,      # 5
-        goal_ohe,           # 4
-        lang_match,         # 1
-    ])
+    feature_vector = np.concatenate(
+        [
+            skill_overlap,  # 50
+            accom_coverage,  # 20
+            disability_ohe,  # 8
+            work_mode_ohe,  # 3
+            education_ohe,  # 5
+            goal_ohe,  # 4
+            lang_match,  # 1
+        ]
+    )
 
     return feature_vector.astype(np.float32)
 
@@ -152,7 +143,7 @@ class EmploymentDataset(Dataset):
         users_df: pd.DataFrame,
         jobs_df: pd.DataFrame,
         consent_filter: bool = True,
-        sample_weights: Optional[np.ndarray] = None,
+        sample_weights: np.ndarray | None = None,
     ) -> None:
         # Apply consent filter (privacy-preserving pipeline requirement)
         if consent_filter and "consent_given" in users_df.columns:
@@ -167,7 +158,7 @@ class EmploymentDataset(Dataset):
     def __len__(self) -> int:
         return len(self.outcomes)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         row = self.outcomes.iloc[idx]
         user_id = row["user_id"]
         job_id = row["job_id"]
@@ -177,7 +168,7 @@ class EmploymentDataset(Dataset):
         job_row = self.jobs_df.loc[job_id]
 
         features = encode_user_job_pair(user_row, job_row)
-        item: Dict[str, torch.Tensor] = {
+        item: dict[str, torch.Tensor] = {
             "features": torch.from_numpy(features),
             "label": torch.tensor(label, dtype=torch.float32),
             "idx": torch.tensor(idx, dtype=torch.long),
@@ -214,15 +205,18 @@ class EmploymentDataset(Dataset):
             Group label for each sample in the dataset.
         """
         user_ids = self.outcomes["user_id"].values
-        return np.array([
-            self.users_df.loc[uid, attribute] if uid in self.users_df.index else "unknown"
-            for uid in user_ids
-        ])
+        return np.array(
+            [
+                self.users_df.loc[uid, attribute] if uid in self.users_df.index else "unknown"
+                for uid in user_ids
+            ]
+        )
+
     def split(
         self,
         test_size: float = 0.20,
         seed: int = 42,
-    ) -> tuple["EmploymentDataset", "EmploymentDataset"]:
+    ) -> tuple[EmploymentDataset, EmploymentDataset]:
         """Return (train_dataset, test_dataset) with stratified split on label.
 
         Parameters
@@ -256,16 +250,13 @@ class EmploymentDataset(Dataset):
         users_df_reset = self.users_df.reset_index()
         jobs_df_reset = self.jobs_df.reset_index()
 
-        train_weights = (
-            self.sample_weights[train_idx]
-            if self.sample_weights is not None else None
-        )
+        train_weights = self.sample_weights[train_idx] if self.sample_weights is not None else None
 
         train_ds = EmploymentDataset(
             outcomes_df=train_outcomes,
             users_df=users_df_reset,
             jobs_df=jobs_df_reset,
-            consent_filter=False,   # Already filtered upstream
+            consent_filter=False,  # Already filtered upstream
             sample_weights=train_weights,
         )
         test_ds = EmploymentDataset(
@@ -273,6 +264,6 @@ class EmploymentDataset(Dataset):
             users_df=users_df_reset,
             jobs_df=jobs_df_reset,
             consent_filter=False,
-            sample_weights=None,    # Never weight the test set
+            sample_weights=None,  # Never weight the test set
         )
         return train_ds, test_ds

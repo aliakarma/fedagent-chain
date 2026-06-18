@@ -7,12 +7,9 @@ aggregated via federated averaging.
 
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from omegaconf import DictConfig
 
 
@@ -53,12 +50,14 @@ class EmploymentMatchingModel(nn.Module):
         layers: list[nn.Module] = []
         prev_dim = input_dim
         for hdim in hidden_dims:
-            layers.extend([
-                nn.Linear(prev_dim, hdim),
-                nn.LayerNorm(hdim),
-                nn.ReLU(inplace=True),
-                nn.Dropout(p=dropout_rate),
-            ])
+            layers.extend(
+                [
+                    nn.Linear(prev_dim, hdim),
+                    nn.LayerNorm(hdim),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(p=dropout_rate),
+                ]
+            )
             prev_dim = hdim
 
         layers.append(nn.Linear(prev_dim, 1))
@@ -107,7 +106,7 @@ class EmploymentMatchingModel(nn.Module):
             probs = self.forward(x).squeeze(-1)
             return (probs >= threshold).long()
 
-    def get_state_dict_numpy(self) -> Dict[str, np.ndarray]:
+    def get_state_dict_numpy(self) -> dict[str, np.ndarray]:
         """Return model state dict with numpy arrays (for federated communication).
 
         Returns
@@ -115,12 +114,9 @@ class EmploymentMatchingModel(nn.Module):
         dict
             Parameter name → numpy array mapping.
         """
-        return {
-            name: param.detach().cpu().numpy()
-            for name, param in self.state_dict().items()
-        }
+        return {name: param.detach().cpu().numpy() for name, param in self.state_dict().items()}
 
-    def load_state_dict_numpy(self, numpy_state: Dict[str, np.ndarray]) -> None:
+    def load_state_dict_numpy(self, numpy_state: dict[str, np.ndarray]) -> None:
         """Load model weights from a numpy state dict.
 
         Parameters
@@ -129,13 +125,12 @@ class EmploymentMatchingModel(nn.Module):
             Parameter name → numpy array mapping.
         """
         torch_state = {
-            name: torch.from_numpy(np.array(arr).copy())
-            for name, arr in numpy_state.items()
+            name: torch.from_numpy(np.array(arr).copy()) for name, arr in numpy_state.items()
         }
         self.load_state_dict(torch_state)
 
     @classmethod
-    def from_config(cls, cfg: DictConfig) -> "EmploymentMatchingModel":
+    def from_config(cls, cfg: DictConfig) -> EmploymentMatchingModel:
         """Instantiate a model from a Hydra config object.
 
         Parameters

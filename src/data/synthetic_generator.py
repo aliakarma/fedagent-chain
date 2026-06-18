@@ -8,11 +8,9 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from omegaconf import DictConfig
 
 from src.data.schema import (
     DisabilityCategory,
@@ -30,7 +28,7 @@ from src.utils.seed_utils import get_rng
 logger = get_logger("SyntheticGenerator")
 
 # Cross-country language distribution (primary languages per node)
-NODE_LANGUAGE_DISTRIBUTION: Dict[str, Dict[str, float]] = {
+NODE_LANGUAGE_DISTRIBUTION: dict[str, dict[str, float]] = {
     "saudi_arabia": {"ar": 0.75, "en": 0.15, "ur": 0.07, "tl": 0.03},
     "united_states": {"en": 0.80, "es": 0.12, "zh": 0.04, "fr": 0.04},
     "china": {"zh": 0.85, "en": 0.10, "yue": 0.05},
@@ -38,42 +36,70 @@ NODE_LANGUAGE_DISTRIBUTION: Dict[str, Dict[str, float]] = {
 }
 
 # Disability category distribution (calibrated against WHO WRD statistics)
-NODE_DISABILITY_DISTRIBUTION: Dict[str, Dict[str, float]] = {
+NODE_DISABILITY_DISTRIBUTION: dict[str, dict[str, float]] = {
     "saudi_arabia": {
-        "mobility": 0.22, "vision": 0.15, "hearing": 0.14,
-        "cognitive": 0.12, "communication": 0.08,
-        "mental_health": 0.10, "chronic_health": 0.12, "multiple": 0.07,
+        "mobility": 0.22,
+        "vision": 0.15,
+        "hearing": 0.14,
+        "cognitive": 0.12,
+        "communication": 0.08,
+        "mental_health": 0.10,
+        "chronic_health": 0.12,
+        "multiple": 0.07,
     },
     "united_states": {
-        "mobility": 0.18, "vision": 0.12, "hearing": 0.13,
-        "cognitive": 0.15, "communication": 0.10,
-        "mental_health": 0.15, "chronic_health": 0.12, "multiple": 0.05,
+        "mobility": 0.18,
+        "vision": 0.12,
+        "hearing": 0.13,
+        "cognitive": 0.15,
+        "communication": 0.10,
+        "mental_health": 0.15,
+        "chronic_health": 0.12,
+        "multiple": 0.05,
     },
     "china": {
-        "mobility": 0.25, "vision": 0.17, "hearing": 0.18,
-        "cognitive": 0.10, "communication": 0.07,
-        "mental_health": 0.08, "chronic_health": 0.10, "multiple": 0.05,
+        "mobility": 0.25,
+        "vision": 0.17,
+        "hearing": 0.18,
+        "cognitive": 0.10,
+        "communication": 0.07,
+        "mental_health": 0.08,
+        "chronic_health": 0.10,
+        "multiple": 0.05,
     },
     "europe": {
-        "mobility": 0.20, "vision": 0.13, "hearing": 0.13,
-        "cognitive": 0.14, "communication": 0.09,
-        "mental_health": 0.14, "chronic_health": 0.12, "multiple": 0.05,
+        "mobility": 0.20,
+        "vision": 0.13,
+        "hearing": 0.13,
+        "cognitive": 0.14,
+        "communication": 0.09,
+        "mental_health": 0.14,
+        "chronic_health": 0.12,
+        "multiple": 0.05,
     },
 }
 
 # Sectors available per node
 SECTORS = [
-    "technology", "healthcare", "education", "finance", "retail",
-    "manufacturing", "government", "nonprofit", "logistics", "creative",
+    "technology",
+    "healthcare",
+    "education",
+    "finance",
+    "retail",
+    "manufacturing",
+    "government",
+    "nonprofit",
+    "logistics",
+    "creative",
 ]
 
 
 def _sample_categorical(
     rng: np.random.Generator,
-    categories: List[str],
-    probabilities: List[float],
+    categories: list[str],
+    probabilities: list[float],
     n: int,
-) -> List[str]:
+) -> list[str]:
     """Sample n items from categories with given probabilities."""
     return rng.choice(categories, size=n, p=probabilities).tolist()
 
@@ -82,7 +108,7 @@ def generate_user_profiles(
     node_id: str,
     n_users: int,
     rng: np.random.Generator,
-) -> List[UserProfile]:
+) -> list[UserProfile]:
     """Generate synthetic user profiles for a single regional node.
 
     Parameters
@@ -151,7 +177,7 @@ def generate_job_profiles(
     node_id: str,
     n_jobs: int,
     rng: np.random.Generator,
-) -> List[JobProfile]:
+) -> list[JobProfile]:
     """Generate synthetic job profiles for a regional node.
 
     Parameters
@@ -196,8 +222,8 @@ def compute_suitability_label(
     user: UserProfile,
     job: JobProfile,
     threshold: float = 0.50,
-    rng: Optional[np.random.Generator] = None,
-) -> Tuple[int, float]:
+    rng: np.random.Generator | None = None,
+) -> tuple[int, float]:
     """Compute a deterministic suitability label for a user-job pair.
 
     The suitability score is computed using a rule-based function that considers
@@ -243,12 +269,7 @@ def compute_suitability_label(
     # Label-generating oracle uses deliberately different coefficients
     # from the model's scoring function (α=0.40 / β=0.25 / γ=0.20 / δ=0.15)
     # to prevent artificial separability.
-    score = (
-        0.35 * skill_overlap
-        + 0.30 * accom_coverage
-        + 0.20 * lang_match
-        + 0.15 * mode_match
-    )
+    score = 0.35 * skill_overlap + 0.30 * accom_coverage + 0.20 * lang_match + 0.15 * mode_match
 
     # Add noise for label diversity
     if rng is not None:
@@ -265,7 +286,7 @@ def generate_synthetic_node_data(
     n_jobs: int = 1250,
     n_pairs: int = 12500,
     seed: int = 42,
-) -> Dict[str, pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     """Generate a complete synthetic dataset for a single node.
 
     Parameters
@@ -305,7 +326,7 @@ def generate_synthetic_node_data(
     user_map = {u.user_id: u for u in consented_users}
     job_map = {j.job_id: j for j in jobs}
 
-    for uid, jid in zip(sampled_user_ids, sampled_job_ids):
+    for uid, jid in zip(sampled_user_ids, sampled_job_ids, strict=False):
         label, score = compute_suitability_label(user_map[uid], job_map[jid], rng=rng)
         outcomes.append(
             EmploymentOutcome(

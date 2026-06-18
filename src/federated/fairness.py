@@ -6,8 +6,6 @@ objective Ω_fair from Section 4.6 of the FedAgent-Chain paper.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 import numpy as np
 
 from src.utils.logging_utils import get_logger
@@ -16,7 +14,7 @@ logger = get_logger("FairnessOptimizer")
 
 
 def compute_fairness_disparity(
-    group_metrics: Dict[str, float],
+    group_metrics: dict[str, float],
     metric_name: str = "f1_score",
 ) -> float:
     """Compute fairness disparity across protected groups.
@@ -70,7 +68,7 @@ def compute_fairness_disparity(
 
 
 def compute_fairness_penalty(
-    group_metrics: Dict[str, float],
+    group_metrics: dict[str, float],
     lambda_fairness: float = 0.1,
 ) -> float:
     """Compute the fairness regularization penalty Ω_fair.
@@ -96,8 +94,8 @@ def compute_fairness_penalty(
 
 
 def compute_all_disparities(
-    per_group_metrics: Dict[str, Dict[str, float]],
-) -> Dict[str, float]:
+    per_group_metrics: dict[str, dict[str, float]],
+) -> dict[str, float]:
     """Compute fairness disparity across all protected attribute dimensions.
 
     Parameters
@@ -134,7 +132,7 @@ def group_performance_from_predictions(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     group_labels: np.ndarray,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute per-group F1 scores from predictions and group membership.
 
     Parameters
@@ -154,7 +152,7 @@ def group_performance_from_predictions(
     from sklearn.metrics import f1_score
 
     unique_groups = np.unique(group_labels)
-    group_f1s: Dict[str, float] = {}
+    group_f1s: dict[str, float] = {}
 
     for group in unique_groups:
         mask = group_labels == group
@@ -168,7 +166,7 @@ def group_performance_from_predictions(
 
 def fairness_reweight_samples(
     group_labels: np.ndarray,
-    target_distribution: Optional[Dict[str, float]] = None,
+    target_distribution: dict[str, float] | None = None,
 ) -> np.ndarray:
     """Compute per-sample weights to rebalance group representation.
 
@@ -194,10 +192,10 @@ def fairness_reweight_samples(
         total = sum(target_distribution.values())
         target = {g: v / total for g, v in target_distribution.items()}
 
-    actual = {g: c / n_samples for g, c in zip(unique_groups, counts)}
+    actual = {g: c / n_samples for g, c in zip(unique_groups, counts, strict=False)}
     weights = np.ones(n_samples, dtype=np.float32)
 
-    for group, count in zip(unique_groups, counts):
+    for group, _count in zip(unique_groups, counts, strict=False):
         mask = group_labels == group
         target_prop = target.get(str(group), 1.0 / n_groups)
         actual_prop = actual[group]

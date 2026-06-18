@@ -31,7 +31,7 @@ def load_config(config_path: str | Path) -> DictConfig:
     config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
-    return OmegaConf.load(config_path)
+    return OmegaConf.load(config_path)  # type: ignore[return-value]
 
 
 def merge_configs(*configs: DictConfig) -> DictConfig:
@@ -49,7 +49,7 @@ def merge_configs(*configs: DictConfig) -> DictConfig:
     """
     base = OmegaConf.create({})
     for cfg in configs:
-        base = OmegaConf.merge(base, cfg)
+        base = OmegaConf.merge(base, cfg)  # type: ignore[assignment]
     return base
 
 

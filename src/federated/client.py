@@ -10,9 +10,6 @@ Each regional institutional node runs a FederatedClient instance that:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -23,10 +20,7 @@ from src.blockchain.chain import PermissionedBlockchain
 from src.data.dataset import EmploymentDataset
 from src.evaluation.fairness_evaluator import FairnessEvaluator
 from src.evaluation.metrics import compute_classification_metrics
-from src.federated.fairness import (
-    compute_fairness_penalty,
-    group_performance_from_predictions,
-)
+from src.federated.fairness import group_performance_from_predictions
 from src.federated.privacy import protect_state_dict
 from src.models.employment_model import EmploymentMatchingModel
 from src.utils.logging_utils import get_logger
@@ -74,24 +68,24 @@ class FederatedClient:
         self.logger = get_logger(f"FederatedClient[{node_id}]")
         self.fairness_evaluator = FairnessEvaluator()
 
-        fed_cfg     = cfg.get("federated", {})
+        fed_cfg = cfg.get("federated", {})
         privacy_cfg = cfg.get("privacy", {})
 
-        self.local_epochs:   int   = int(fed_cfg.get("local_epochs",           5))
-        self.batch_size:     int   = int(fed_cfg.get("batch_size",             64))
-        self.learning_rate:  float = float(fed_cfg.get("learning_rate",        0.001))
-        self.C:              float = float(privacy_cfg.get("clipping_threshold", 1.0))
-        self.sigma:          float = float(privacy_cfg.get("noise_multiplier",   0.1))
-        self.privacy_enabled: bool = bool(privacy_cfg.get("enabled",             True))
+        self.local_epochs: int = int(fed_cfg.get("local_epochs", 5))
+        self.batch_size: int = int(fed_cfg.get("batch_size", 64))
+        self.learning_rate: float = float(fed_cfg.get("learning_rate", 0.001))
+        self.C: float = float(privacy_cfg.get("clipping_threshold", 1.0))
+        self.sigma: float = float(privacy_cfg.get("noise_multiplier", 0.1))
+        self.privacy_enabled: bool = bool(privacy_cfg.get("enabled", True))
         self.consent_ref: str = f"consent_{node_id}_v1"
         self.policy_ref: str = f"policy_{node_id}_gdpr"
 
     def train_round(
         self,
-        global_state: Dict[str, np.ndarray],
+        global_state: dict[str, np.ndarray],
         round_number: int,
-        seed: Optional[int] = None,
-    ) -> Tuple[Dict[str, np.ndarray], int, Dict[str, float]]:
+        seed: int | None = None,
+    ) -> tuple[dict[str, np.ndarray], int, dict[str, float]]:
         """Execute one federated learning round on local data.
 
         Returns
@@ -103,6 +97,7 @@ class FederatedClient:
                        'time_local_training', 'time_blockchain', 'model_size_bytes'
         """
         import time
+
         start_total = time.time()
         if seed is not None:
             set_global_seed(seed + round_number)
@@ -128,15 +123,15 @@ class FederatedClient:
         model.train()
         epoch_losses = []
         fairness_enabled = bool(self.cfg.get("fairness", {}).get("enabled", False))
-        lambda_fair      = float(self.cfg.get("fairness", {}).get("lambda_fairness", 0.1))
-        batch_counter    = 0
+        lambda_fair = float(self.cfg.get("fairness", {}).get("lambda_fairness", 0.1))
+        batch_counter = 0
 
-        for epoch in range(self.local_epochs):
+        for _epoch in range(self.local_epochs):
             batch_losses = []
             for batch in loader:
                 features = batch["features"].to(self.device)
-                labels   = batch["label"].to(self.device)
-                weights  = batch.get("weight")
+                labels = batch["label"].to(self.device)
+                weights = batch.get("weight")
 
                 optimizer.zero_grad()
                 preds = model(features).squeeze(-1)
@@ -167,16 +162,16 @@ class FederatedClient:
                                 # Differentiable surrogate: difference in mean predicted probabilities
                                 group_means = {}
                                 for g in group_f1s.keys():
-                                    mask = (batch_group_labels == g)
+                                    mask = batch_group_labels == g
                                     if mask.any():
                                         group_means[g] = preds[mask].mean()
-                                
+
                                 if len(group_means) >= 2:
                                     vals = torch.stack(list(group_means.values()))
                                     diff = vals.max() - vals.min()
                                     fairness_penalty_value = float(diff.item())
                                     loss = loss + lambda_fair * diff
-                                    
+
                                     # Log fairness penalty magnitude every 50 batches
                                     if batch_counter % 50 == 0:
                                         self.logger.debug(
@@ -204,9 +199,8 @@ class FederatedClient:
         final_state = model.get_state_dict_numpy()
 
         # Compute update delta: Δw_k = w_k^t - w_global^t
-        delta: Dict[str, np.ndarray] = {
-            name: final_state[name] - initial_state[name]
-            for name in final_state
+        delta: dict[str, np.ndarray] = {
+            name: final_state[name] - initial_state[name] for name in final_state
         }
 
         # Apply differential privacy protection to the DELTA (clipping + noise)
@@ -218,14 +212,13 @@ class FederatedClient:
 
         # Reconstruct DP-protected absolute weights for communication to server
         # w_k_protected = w_global + Δw̃_k
-        protected_absolute_weights: Dict[str, np.ndarray] = {
-            name: initial_state[name] + protected_delta[name]
-            for name in initial_state
+        protected_absolute_weights: dict[str, np.ndarray] = {
+            name: initial_state[name] + protected_delta[name] for name in initial_state
         }
 
         # Submit hash to blockchain (ONLY the hash of the PROTECTED DELTA)
         flat_protected_delta = np.concatenate([v.flatten() for v in protected_delta.values()])
-        
+
         start_bc = time.time()
         self.blockchain.submit_model_update_hash(
             protected_update=flat_protected_delta,
@@ -239,11 +232,11 @@ class FederatedClient:
         # Evaluate local model
         metrics = self._evaluate_local(model)
         metrics["train_loss"] = float(np.mean(epoch_losses))
-        
+
         # Systems overhead metrics
         metrics["time_local_training"] = round(time_training, 4)
         metrics["time_blockchain"] = round(time_blockchain, 4)
-        
+
         # Model size calculation (approximate bytes of float32 weights)
         model_size_bytes = sum(v.nbytes for v in protected_absolute_weights.values())
         metrics["model_size_bytes"] = int(model_size_bytes)
@@ -261,7 +254,7 @@ class FederatedClient:
 
         return protected_absolute_weights, len(self.train_dataset), metrics
 
-    def _evaluate_local(self, model: EmploymentMatchingModel) -> Dict[str, float]:
+    def _evaluate_local(self, model: EmploymentMatchingModel) -> dict[str, float]:
         """Evaluate the locally trained model on the held-out test dataset.
 
         Parameters
@@ -296,9 +289,11 @@ class FederatedClient:
             group_labels = self.test_dataset.get_group_labels("disability_category")
             group_f1s = group_performance_from_predictions(y_true, y_pred, group_labels)
             metrics["min_group_f1"] = float(min(group_f1s.values())) if group_f1s else 0.0
-            metrics["fairness_disparity_disability"] = float(
-                max(group_f1s.values()) - min(group_f1s.values())
-            ) if len(group_f1s) >= 2 else 0.0
+            metrics["fairness_disparity_disability"] = (
+                float(max(group_f1s.values()) - min(group_f1s.values()))
+                if len(group_f1s) >= 2
+                else 0.0
+            )
         except Exception:
             metrics["min_group_f1"] = 0.0
             metrics["fairness_disparity_disability"] = 0.0
@@ -315,15 +310,13 @@ class FederatedClient:
         """
         if not hasattr(self, "_group_label_cache"):
             try:
-                self._group_label_cache = self.train_dataset.get_group_labels(
-                    "disability_category"
-                )
+                self._group_label_cache = self.train_dataset.get_group_labels("disability_category")
             except Exception:
                 self.logger.warning(
                     "Failed to build group label cache for fairness penalty",
                     node_id=self.node_id,
                 )
-                self._group_label_cache = None
+                self._group_label_cache = None  # type: ignore[assignment]
 
         if self._group_label_cache is None:
             return None

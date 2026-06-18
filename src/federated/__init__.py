@@ -8,12 +8,7 @@ from src.federated.fairness import (
     fairness_reweight_samples,
     group_performance_from_predictions,
 )
-from src.federated.privacy import (
-    add_dp_noise,
-    clip_update,
-    protect_state_dict,
-    protect_update,
-)
+from src.federated.privacy import add_dp_noise, clip_update, protect_state_dict, protect_update
 
 __all__ = [
     "FedAvgAggregator",

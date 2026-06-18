@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from omegaconf import DictConfig
@@ -53,7 +52,7 @@ class FederatedServer:
         self.n_rounds: int = int(cfg.federated.get("n_rounds", 20))
         self.min_clients: int = int(cfg.federated.get("min_clients", 4))
 
-        fed_cfg = cfg.get("federated", {})
+        cfg.get("federated", {})
         fairness_cfg = cfg.get("fairness", {})
 
         if use_fairness_aggregation:
@@ -68,9 +67,9 @@ class FederatedServer:
         # Initialise global model
         model_cfg = cfg.get("model", {})
         self.global_model = EmploymentMatchingModel.from_config(model_cfg)
-        self.global_state: Dict[str, np.ndarray] = self.global_model.get_state_dict_numpy()
+        self.global_state: dict[str, np.ndarray] = self.global_model.get_state_dict_numpy()
 
-        self.round_history: List[Dict] = []
+        self.round_history: list[dict] = []
         logger.info(
             "FederatedServer initialised",
             n_rounds=self.n_rounds,
@@ -80,10 +79,10 @@ class FederatedServer:
 
     def run(
         self,
-        clients: List[FederatedClient],
+        clients: list[FederatedClient],
         seed: int = 42,
         use_mlflow: bool = True,
-    ) -> Dict:
+    ) -> dict:
         """Execute the full federated training loop.
 
         Parameters
@@ -106,18 +105,19 @@ class FederatedServer:
             If fewer clients than min_clients are provided.
         """
         if len(clients) < self.min_clients:
-            raise ValueError(
-                f"Requires at least {self.min_clients} clients, got {len(clients)}."
-            )
+            raise ValueError(f"Requires at least {self.min_clients} clients, got {len(clients)}.")
 
         if use_mlflow:
             import mlflow
-            mlflow.log_params({
-                "n_rounds": self.n_rounds,
-                "n_clients": len(clients),
-                "use_fairness_aggregation": self.use_fairness,
-                "seed": seed,
-            })
+
+            mlflow.log_params(
+                {
+                    "n_rounds": self.n_rounds,
+                    "n_clients": len(clients),
+                    "use_fairness_aggregation": self.use_fairness,
+                    "seed": seed,
+                }
+            )
 
         logger.info(
             "Federated training started",
@@ -137,9 +137,9 @@ class FederatedServer:
 
             if use_mlflow:
                 import mlflow
+
                 mlflow_metrics = {
-                    k: v for k, v in round_metrics.items()
-                    if isinstance(v, (int, float))
+                    k: v for k, v in round_metrics.items() if isinstance(v, int | float)
                 }
                 mlflow.log_metrics(mlflow_metrics, step=round_num)
 
@@ -166,10 +166,10 @@ class FederatedServer:
 
     def run_round(
         self,
-        clients: List[FederatedClient],
+        clients: list[FederatedClient],
         round_num: int,
         seed: int = 42,
-    ) -> Dict:
+    ) -> dict:
         """Execute a single federated learning round.
 
         Parameters
@@ -186,9 +186,9 @@ class FederatedServer:
         dict
             Aggregated metrics for this round.
         """
-        updates: List[Tuple[str, Dict[str, np.ndarray], int]] = []
-        node_metrics: Dict[str, Dict] = {}
-        fairness_scores: Dict[str, float] = {}
+        updates: list[tuple[str, dict[str, np.ndarray], int]] = []
+        node_metrics: dict[str, dict] = {}
+        fairness_scores: dict[str, float] = {}
 
         # Phase 1: Local training at each node
         for client in clients:
@@ -217,9 +217,7 @@ class FederatedServer:
                 logger.warning("Parameter missing from aggregation", param=name)
 
         # Convergence diagnostics
-        total_weight_norm = float(np.sqrt(sum(
-            np.sum(v ** 2) for v in self.global_state.values()
-        )))
+        total_weight_norm = float(np.sqrt(sum(np.sum(v**2) for v in self.global_state.values())))
         logger.info(
             "Global model weight norm",
             round=round_num,
@@ -227,13 +225,16 @@ class FederatedServer:
         )
 
         # Aggregate round metrics across nodes
-        round_summary: Dict = {}
-        for metric_name in ["f1", "accuracy", "precision", "recall",
-                             "train_loss", "fairness_disparity_disability"]:
-            values = [
-                m[metric_name] for m in node_metrics.values()
-                if metric_name in m
-            ]
+        round_summary: dict = {}
+        for metric_name in [
+            "f1",
+            "accuracy",
+            "precision",
+            "recall",
+            "train_loss",
+            "fairness_disparity_disability",
+        ]:
+            values = [m[metric_name] for m in node_metrics.values() if metric_name in m]
             if values:
                 round_summary[f"mean_{metric_name}"] = float(np.mean(values))
                 round_summary[f"std_{metric_name}"] = float(np.std(values))
@@ -246,13 +247,13 @@ class FederatedServer:
 
         # Systems overhead metrics
         round_summary["time_aggregation"] = round(time_aggregation, 4)
-        
+
         # Communication overhead (bytes from nodes to server)
         round_bytes = sum(m.get("model_size_bytes", 0) for m in node_metrics.values())
         # Bytes from server back to nodes (global model broadcast)
         model_size = sum(v.nbytes for v in self.global_state.values())
         round_bytes += model_size * len(clients)
-        
+
         round_summary["bytes_transmitted"] = int(round_bytes)
         round_summary["model_size_kb"] = round(model_size / 1024, 2)
 
@@ -282,8 +283,7 @@ class FederatedServer:
         prefix = "final_model" if final else f"global_model_round_{round_num:03d}"
         # Convert numpy state back to torch for saving
         torch_state = {
-            name: torch.from_numpy(np.array(arr).copy())
-            for name, arr in self.global_state.items()
+            name: torch.from_numpy(np.array(arr).copy()) for name, arr in self.global_state.items()
         }
         ckpt_path = self.output_dir / "checkpoints" / f"{prefix}.pt"
         ckpt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -295,7 +295,7 @@ class FederatedServer:
         save_json(self.round_history, self.output_dir / "metrics" / "per_round.json")
         logger.info("Round history saved")
 
-    def _compute_final_results(self) -> Dict:
+    def _compute_final_results(self) -> dict:
         """Compute final aggregated results from round history."""
         if not self.round_history:
             return {}
@@ -304,7 +304,7 @@ class FederatedServer:
         best_f1_round = max(self.round_history, key=lambda r: r.get("mean_f1", 0.0))
 
         total_bytes = sum(r.get("bytes_transmitted", 0) for r in self.round_history)
-        
+
         return {
             "final_round_metrics": final,
             "best_f1": best_f1_round.get("mean_f1", 0.0),

@@ -1,7 +1,9 @@
 """Adaptive upskilling recommendation agent for FedAgent-Chain."""
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+
+from typing import Any
+
 import numpy as np
 from omegaconf import DictConfig
 
@@ -26,22 +28,20 @@ class UpskillingAgent(BaseAgent):
         super().__init__(agent_cfg, governance_threshold)
         self.top_k_skills: int = int(agent_cfg.get("top_k_skills", 5))
 
-    def compute_skill_gap(
-        self, user_skills: np.ndarray, job_skills: np.ndarray
-    ) -> np.ndarray:
+    def compute_skill_gap(self, user_skills: np.ndarray, job_skills: np.ndarray) -> np.ndarray:
         """Return binary vector of skills required by job but missing in user."""
         return np.maximum(0, job_skills - user_skills).astype(int)
 
     def aggregate_skill_gaps(
-        self, user: UserProfile, jobs: List[JobProfile]
-    ) -> List[Dict[str, Any]]:
+        self, user: UserProfile, jobs: list[JobProfile]
+    ) -> list[dict[str, Any]]:
         """Aggregate skill gaps across top jobs and rank by frequency."""
         u_skills = np.array(user.skill_vector, dtype=float)
         gap_counts = np.zeros(50, dtype=int)
 
         for job in jobs:
             j_skills = np.array(job.required_skills, dtype=float)
-            gap      = self.compute_skill_gap(u_skills, j_skills)
+            gap = self.compute_skill_gap(u_skills, j_skills)
             gap_counts += gap
 
         # Top-K most-needed skills
@@ -49,8 +49,8 @@ class UpskillingAgent(BaseAgent):
         return [
             {
                 "skill_index": int(idx),
-                "frequency":   int(gap_counts[idx]),
-                "priority":    i + 1,
+                "frequency": int(gap_counts[idx]),
+                "priority": i + 1,
             }
             for i, idx in enumerate(top_indices)
             if gap_counts[idx] > 0
@@ -59,17 +59,17 @@ class UpskillingAgent(BaseAgent):
     def run(
         self,
         user_id: str,
-        user: Optional[UserProfile] = None,
-        top_jobs: Optional[List[JobProfile]] = None,
+        user: UserProfile | None = None,
+        top_jobs: list[JobProfile] | None = None,
         **kwargs: Any,
     ) -> AgentOutput:
         if user is None or top_jobs is None:
             raise ValueError("UpskillingAgent requires 'user' and 'top_jobs'.")
 
-        skill_gaps  = self.aggregate_skill_gaps(user, top_jobs)
-        coverage    = len(skill_gaps) / max(self.top_k_skills, 1)
-        confidence  = float(coverage)
-        risk        = self._compute_base_risk_score(confidence, user.disability_category.value)
+        skill_gaps = self.aggregate_skill_gaps(user, top_jobs)
+        coverage = len(skill_gaps) / max(self.top_k_skills, 1)
+        confidence = float(coverage)
+        risk = self._compute_base_risk_score(confidence, user.disability_category.value)
 
         explanation = (
             f"Identified {len(skill_gaps)} priority upskilling targets "

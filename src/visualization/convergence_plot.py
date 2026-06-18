@@ -7,21 +7,19 @@ Standard FedAvg vs Fairness-Aware FedAvg across training rounds.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 
-from src.visualization.styles import apply_fedagent_style, COLORS, FIGSIZE_SINGLE
+from src.visualization.styles import COLORS, FIGSIZE_SINGLE, apply_fedagent_style
 
 
 def plot_convergence_curve(
-    round_history: List[Dict],
+    round_history: list[dict],
     metric: str = "mean_f1",
     label: str = "FedAgent-Chain",
-    ax: Optional[plt.Axes] = None,
-    color: Optional[str] = None,
+    ax: plt.Axes | None = None,
+    color: str | None = None,
 ) -> plt.Axes:
     """Plot a single convergence curve from round-level metric history.
 
@@ -70,11 +68,11 @@ def plot_convergence_curve(
 
 
 def plot_multi_convergence(
-    histories: Dict[str, List[Dict]],
+    histories: dict[str, list[dict]],
     metric: str = "mean_f1",
     title: str = "Federated Learning Convergence",
     ylabel: str = "F1 Score",
-    output_path: Optional[str | Path] = None,
+    output_path: str | Path | None = None,
     show: bool = False,
 ) -> plt.Figure:
     """Plot convergence curves for multiple FL variants on one figure.
@@ -107,8 +105,7 @@ def plot_multi_convergence(
     color_cycle = list(COLORS.values())
     for i, (label, history) in enumerate(histories.items()):
         plot_convergence_curve(
-            history, metric=metric, label=label, ax=ax,
-            color=color_cycle[i % len(color_cycle)]
+            history, metric=metric, label=label, ax=ax, color=color_cycle[i % len(color_cycle)]
         )
 
     ax.set_xlabel("Federated Round", fontsize=12)
@@ -131,9 +128,9 @@ def plot_multi_convergence(
 
 
 def plot_fairness_disparity_over_rounds(
-    histories: Dict[str, List[Dict]],
+    histories: dict[str, list[dict]],
     attribute: str = "disability",
-    output_path: Optional[str | Path] = None,
+    output_path: str | Path | None = None,
     show: bool = False,
 ) -> plt.Figure:
     """Plot fairness disparity D_fair over training rounds.

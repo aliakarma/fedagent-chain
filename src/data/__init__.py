@@ -12,9 +12,9 @@ from src.data.schema import (
     WorkMode,
 )
 from src.data.synthetic_generator import (
+    generate_job_profiles,
     generate_synthetic_node_data,
     generate_user_profiles,
-    generate_job_profiles,
     save_synthetic_dataset,
 )
 

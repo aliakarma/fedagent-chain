@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 import torch
 
 from src.data.dataset import EmploymentDataset, encode_user_job_pair
 
 
-def build_feature_matrix(dataset: EmploymentDataset) -> Tuple[np.ndarray, np.ndarray]:
+def build_feature_matrix(dataset: EmploymentDataset) -> tuple[np.ndarray, np.ndarray]:
     """Return ``(X, y)`` for a dataset using the shared 91-dim encoding.
 
     Iterates over every consented user-job pair and stacks the encoded feature
@@ -52,10 +50,10 @@ class SklearnProbWrapper:
         probs = self.clf.predict_proba(x)[:, 1]
         return torch.from_numpy(probs.astype(np.float32)).unsqueeze(-1)
 
-    def eval(self) -> "SklearnProbWrapper":  # torch-API compatibility (no-op)
+    def eval(self) -> SklearnProbWrapper:  # torch-API compatibility (no-op)
         return self
 
-    def train(self, mode: bool = True) -> "SklearnProbWrapper":  # no-op
+    def train(self, mode: bool = True) -> SklearnProbWrapper:  # no-op
         return self
 
 
@@ -75,8 +73,8 @@ def train_centralized_lr(train_dataset: EmploymentDataset, seed: int = 42):
         Wrapped, fitted logistic-regression classifier.
     """
     from sklearn.linear_model import LogisticRegression
-    from sklearn.preprocessing import StandardScaler
     from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
 
     X, y = build_feature_matrix(train_dataset)
     clf = make_pipeline(

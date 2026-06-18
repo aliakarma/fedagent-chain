@@ -6,8 +6,6 @@ Section 4.7 of the FedAgent-Chain paper.
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
 import numpy as np
 from omegaconf import DictConfig
 
@@ -33,8 +31,8 @@ class FedAvgAggregator:
         self.cfg = cfg
 
     def compute_weights(
-        self, updates: List[Tuple[str, Dict[str, np.ndarray], int]]
-    ) -> Dict[str, float]:
+        self, updates: list[tuple[str, dict[str, np.ndarray], int]]
+    ) -> dict[str, float]:
         """Compute per-node aggregation weights.
 
         Parameters
@@ -51,8 +49,8 @@ class FedAvgAggregator:
         return {node_id: n / total_samples for node_id, _, n in updates}
 
     def aggregate(
-        self, updates: List[Tuple[str, Dict[str, np.ndarray], int]]
-    ) -> Dict[str, np.ndarray]:
+        self, updates: list[tuple[str, dict[str, np.ndarray], int]]
+    ) -> dict[str, np.ndarray]:
         """Aggregate local absolute model weights via weighted average.
 
         Parameters
@@ -85,7 +83,7 @@ class FedAvgAggregator:
         weights = self.compute_weights(updates)
         _, first_state, _ = updates[0]
 
-        aggregated: Dict[str, np.ndarray] = {}
+        aggregated: dict[str, np.ndarray] = {}
         for param_name in first_state:
             weighted_sum = np.zeros_like(first_state[param_name], dtype=np.float64)
             for node_id, state_dict, _ in updates:
@@ -128,11 +126,9 @@ class FairnessAwareFedAvgAggregator(FedAvgAggregator):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__(cfg)
         self.lambda_fairness: float = cfg.get("lambda_fairness", 0.1)
-        self.protected_groups: List[str] = list(cfg.get("protected_groups", []))
+        self.protected_groups: list[str] = list(cfg.get("protected_groups", []))
 
-    def compute_fairness_adjustment(
-        self, node_id: str, fairness_scores: Dict[str, float]
-    ) -> float:
+    def compute_fairness_adjustment(self, node_id: str, fairness_scores: dict[str, float]) -> float:
         """Compute the fairness adjustment factor ρ_k for a node.
 
         Nodes with lower minimum group performance receive a higher ρ_k,
@@ -151,15 +147,17 @@ class FairnessAwareFedAvgAggregator(FedAvgAggregator):
             Fairness adjustment factor ρ_k ≥ 1.0.
         """
         min_group_score = fairness_scores.get(node_id, 1.0)
-        # Nodes with higher min-group performance get higher weight
-        rho = 1.0 + self.lambda_fairness * min_group_score
+        # Upweight nodes with LOWER min-group performance (worse fairness), so a
+        # perfectly fair node (score=1.0) gets ρ_k=1.0 and underperforming nodes
+        # get ρ_k>1.0 — consistent with the paper's fairness-aware reweighting.
+        rho = 1.0 + self.lambda_fairness * (1.0 - min_group_score)
         return float(rho)
 
     def compute_weights(  # type: ignore[override]
         self,
-        updates: List[Tuple[str, Dict[str, np.ndarray], int]],
-        fairness_scores: Dict[str, float] | None = None,
-    ) -> Dict[str, float]:
+        updates: list[tuple[str, dict[str, np.ndarray], int]],
+        fairness_scores: dict[str, float] | None = None,
+    ) -> dict[str, float]:
         """Compute fairness-adjusted per-node aggregation weights.
 
         Parameters
@@ -195,9 +193,9 @@ class FairnessAwareFedAvgAggregator(FedAvgAggregator):
 
     def aggregate(  # type: ignore[override]
         self,
-        updates: List[Tuple[str, Dict[str, np.ndarray], int]],
-        fairness_scores: Dict[str, float] | None = None,
-    ) -> Dict[str, np.ndarray]:
+        updates: list[tuple[str, dict[str, np.ndarray], int]],
+        fairness_scores: dict[str, float] | None = None,
+    ) -> dict[str, np.ndarray]:
         """Aggregate absolute weights with fairness-adjusted weights.
 
         Parameters
@@ -218,7 +216,7 @@ class FairnessAwareFedAvgAggregator(FedAvgAggregator):
         weights = self.compute_weights(updates, fairness_scores)
         _, first_state, _ = updates[0]
 
-        aggregated: Dict[str, np.ndarray] = {}
+        aggregated: dict[str, np.ndarray] = {}
         for param_name in first_state:
             weighted_sum = np.zeros_like(first_state[param_name], dtype=np.float64)
             for node_id, state_dict, _ in updates:

@@ -5,7 +5,9 @@ learned risk scoring model, and mandates human review above threshold τ.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+
+from typing import Any
+
 import numpy as np
 from omegaconf import DictConfig
 
@@ -46,7 +48,7 @@ class GovernanceAgent(BaseAgent):
         self,
         confidence: float,
         disability_category: str,
-        top_recommendation: Dict[str, Any],
+        top_recommendation: dict[str, Any],
     ) -> float:
         """Compute R_risk(d_i) from recommendation features."""
         risk = 1.0 - confidence  # low confidence = high risk
@@ -74,7 +76,7 @@ class GovernanceAgent(BaseAgent):
     def run(
         self,
         user_id: str,
-        employment_output: Optional[AgentOutput] = None,
+        employment_output: AgentOutput | None = None,
         disability_category: str = "mobility",
         **kwargs: Any,
     ) -> AgentOutput:
@@ -93,7 +95,7 @@ class GovernanceAgent(BaseAgent):
             raise ValueError("GovernanceAgent requires employment_output from EmploymentAgent.")
 
         top_rec = employment_output.recommendations[0] if employment_output.recommendations else {}
-        risk    = self._compute_risk_score(
+        risk = self._compute_risk_score(
             confidence=employment_output.confidence,
             disability_category=disability_category,
             top_recommendation=top_rec,

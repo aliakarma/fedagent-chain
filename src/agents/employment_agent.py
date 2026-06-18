@@ -14,7 +14,7 @@ Coefficients α, β, γ, δ are loaded from configs/agents/employment_agent.yaml
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from omegaconf import DictConfig
@@ -50,13 +50,11 @@ class EmploymentAgent(BaseAgent):
         self.delta: float = float(agent_cfg.get("delta", 0.15))
         self.top_k: int = int(agent_cfg.get("top_k", 10))
 
-        assert abs(self.alpha + self.beta + self.gamma + self.delta - 1.0) < 1e-6, (
-            "Suitability score weights must sum to 1.0"
-        )
+        assert (
+            abs(self.alpha + self.beta + self.gamma + self.delta - 1.0) < 1e-6
+        ), "Suitability score weights must sum to 1.0"
 
-    def _compute_skill_similarity(
-        self, user_skills: np.ndarray, job_skills: np.ndarray
-    ) -> float:
+    def _compute_skill_similarity(self, user_skills: np.ndarray, job_skills: np.ndarray) -> float:
         """Compute weighted Jaccard similarity between user and job skill vectors.
 
         Parameters
@@ -101,7 +99,7 @@ class EmploymentAgent(BaseAgent):
         return covered / total_needs
 
     def _compute_language_match(
-        self, user_lang: str, job_lang: str, user_secondary: Optional[str] = None
+        self, user_lang: str, job_lang: str, user_secondary: str | None = None
     ) -> float:
         """Compute language match indicator L(i, r).
 
@@ -147,9 +145,7 @@ class EmploymentAgent(BaseAgent):
         mode_score = 1.0 if user_mode == job_mode else (0.6 if job_mode == "hybrid" else 0.3)
         return float(mode_score)
 
-    def compute_suitability_score(
-        self, user: UserProfile, job: JobProfile
-    ) -> Dict[str, float]:
+    def compute_suitability_score(self, user: UserProfile, job: JobProfile) -> dict[str, float]:
         """Compute the full suitability score S(i, r) for a user-job pair.
 
         Parameters
@@ -192,8 +188,8 @@ class EmploymentAgent(BaseAgent):
     def rank_jobs(
         self,
         user: UserProfile,
-        jobs: List[JobProfile],
-    ) -> List[Dict[str, Any]]:
+        jobs: list[JobProfile],
+    ) -> list[dict[str, Any]]:
         """Rank all available jobs for a user by suitability score.
 
         Parameters
@@ -228,8 +224,8 @@ class EmploymentAgent(BaseAgent):
     def run(
         self,
         user_id: str,
-        user: Optional[UserProfile] = None,
-        jobs: Optional[List[JobProfile]] = None,
+        user: UserProfile | None = None,
+        jobs: list[JobProfile] | None = None,
         **kwargs: Any,
     ) -> AgentOutput:
         """Execute employment matching for a user.

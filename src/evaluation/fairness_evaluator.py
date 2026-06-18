@@ -7,16 +7,9 @@ and regional nodes.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
-import numpy as np
 import pandas as pd
 
-from src.federated.fairness import (
-    compute_all_disparities,
-    compute_fairness_disparity,
-    group_performance_from_predictions,
-)
+from src.federated.fairness import compute_fairness_disparity, group_performance_from_predictions
 from src.utils.logging_utils import get_logger
 
 logger = get_logger("FairnessEvaluator")
@@ -38,7 +31,7 @@ class FairnessEvaluator:
 
     def __init__(
         self,
-        protected_attributes: List[str] = PROTECTED_ATTRIBUTES,
+        protected_attributes: list[str] = PROTECTED_ATTRIBUTES,
         metric: str = "f1",
     ) -> None:
         self.protected_attributes = protected_attributes
@@ -49,7 +42,7 @@ class FairnessEvaluator:
         df: pd.DataFrame,
         y_true_col: str = "suitability_label",
         y_pred_col: str = "predicted_label",
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Compute fairness disparity across all protected attribute groups.
 
         Parameters
@@ -98,7 +91,7 @@ class FairnessEvaluator:
 
     def evaluate_across_rounds(
         self,
-        round_results: List[Dict],
+        round_results: list[dict],
     ) -> pd.DataFrame:
         """Track fairness disparity across federated learning rounds.
 
@@ -117,9 +110,7 @@ class FairnessEvaluator:
         for round_data in round_results:
             round_num = round_data.get("round", 0)
             for attr, disparity in round_data.get("disparities", {}).items():
-                rows.append(
-                    {"round": round_num, "attribute": attr, "disparity": disparity}
-                )
+                rows.append({"round": round_num, "attribute": attr, "disparity": disparity})
         return pd.DataFrame(rows)
 
     def generate_fairness_report(
@@ -127,7 +118,7 @@ class FairnessEvaluator:
         df: pd.DataFrame,
         y_true_col: str = "suitability_label",
         y_pred_col: str = "predicted_label",
-    ) -> Dict:
+    ) -> dict:
         """Generate a comprehensive fairness evaluation report.
 
         Parameters
@@ -147,7 +138,7 @@ class FairnessEvaluator:
         y_true = df[y_true_col].values
         y_pred = df[y_pred_col].values
 
-        report: Dict = {
+        report: dict = {
             "overall_disparity": {},
             "group_metrics": {},
             "intersectional_analysis": {},

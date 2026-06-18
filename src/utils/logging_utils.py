@@ -29,6 +29,7 @@ def setup_logging(level: str = "INFO", format: str = "json") -> None:
         structlog.processors.StackInfoRenderer(),
     ]
 
+    renderer: object
     if format == "json":
         renderer = structlog.processors.JSONRenderer()
     else:

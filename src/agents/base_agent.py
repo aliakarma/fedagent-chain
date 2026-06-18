@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from omegaconf import DictConfig
 
@@ -42,12 +42,12 @@ class AgentOutput:
 
     agent_type: str
     user_id: str
-    recommendations: List[Dict[str, Any]]
+    recommendations: list[dict[str, Any]]
     confidence: float
     risk_score: float
     requires_human_review: bool
     explanation: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 class BaseAgent(ABC):
@@ -124,7 +124,7 @@ class BaseAgent(ABC):
     def _compute_base_risk_score(
         self,
         confidence: float,
-        disability_category: Optional[str] = None,
+        disability_category: str | None = None,
         is_high_stakes: bool = False,
     ) -> float:
         """Compute a base risk score for governance triggering.

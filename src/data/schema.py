@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -73,16 +72,16 @@ class UserProfile(BaseModel):
 
     user_id: str = Field(..., description="Synthetic UUID — no real PII")
     node_id: NodeID = Field(..., description="Regional institutional node")
-    skill_vector: List[int] = Field(
+    skill_vector: list[int] = Field(
         ..., min_length=50, max_length=50, description="50-dim binary skill vector"
     )
     education_level: EducationLevel
     disability_category: DisabilityCategory
-    accommodation_needs: List[int] = Field(
+    accommodation_needs: list[int] = Field(
         ..., min_length=20, max_length=20, description="20-dim binary accommodation flags"
     )
     language_primary: str = Field(..., min_length=2, max_length=5, description="ISO 639-1 code")
-    language_secondary: Optional[str] = Field(
+    language_secondary: str | None = Field(
         None, min_length=2, max_length=5, description="ISO 639-1 code"
     )
     preferred_work_mode: WorkMode
@@ -93,7 +92,7 @@ class UserProfile(BaseModel):
 
     @field_validator("skill_vector")
     @classmethod
-    def validate_binary_skill_vector(cls, v: List[int]) -> List[int]:
+    def validate_binary_skill_vector(cls, v: list[int]) -> list[int]:
         """Ensure skill vector contains only binary values."""
         if not all(x in (0, 1) for x in v):
             raise ValueError("skill_vector must contain only binary values (0 or 1)")
@@ -101,7 +100,7 @@ class UserProfile(BaseModel):
 
     @field_validator("accommodation_needs")
     @classmethod
-    def validate_binary_accommodation(cls, v: List[int]) -> List[int]:
+    def validate_binary_accommodation(cls, v: list[int]) -> list[int]:
         """Ensure accommodation vector contains only binary values."""
         if not all(x in (0, 1) for x in v):
             raise ValueError("accommodation_needs must contain only binary values (0 or 1)")
@@ -113,14 +112,14 @@ class JobProfile(BaseModel):
 
     job_id: str = Field(..., description="Synthetic job UUID")
     node_id: NodeID = Field(..., description="Regional node where job is posted")
-    required_skills: List[int] = Field(..., min_length=50, max_length=50)
+    required_skills: list[int] = Field(..., min_length=50, max_length=50)
     accessibility_score: float = Field(
         ..., ge=0.0, le=1.0, description="Job's accessibility/inclusivity rating"
     )
     work_mode: WorkMode
     language_required: str = Field(..., min_length=2, max_length=5)
     education_minimum: EducationLevel
-    accommodation_provided: List[int] = Field(..., min_length=20, max_length=20)
+    accommodation_provided: list[int] = Field(..., min_length=20, max_length=20)
     sector: str = Field(..., description="Industry/sector category")
 
 
