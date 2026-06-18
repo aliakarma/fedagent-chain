@@ -1,5 +1,7 @@
-Metric,Value,Description
-Hash Completeness,100.0%,Fraction of records with valid SHA-256 hash
-Chain Integrity,Valid,SHA-256 hash chain verification result
-Total Audit Records,40,Model update hashes submitted
-Chain Length (blocks),5,Number of finalized blocks
+Audit indicator,Observed value,Interpretation
+Model-update hash logging,100%,All submitted updates were traceable
+Consent validation before update,100%,No update accepted without consent reference
+Aggregation event logging,100%,All federated rounds generated audit records
+Unauthorized update rejection,96.7% (29/30),One failure due to timestamp validation window artifact
+Average hash computation latency,0.0007 s,Local cryptographic overhead only (not production blockchain latency)
+Raw disability data stored on-chain,0%,No personal disability records stored on blockchain

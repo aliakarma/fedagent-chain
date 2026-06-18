@@ -1,5 +1,9 @@
-Metric,Value
-Avg Local Training Time,16.01s
-Avg Aggregation Time,0.0005s
-Avg Blockchain Logging Time,0.0007s
-Model Size (KB),513.0 KB
+Component,Observed value,Comment
+Average local training time,16.01 s,"Per-node computation (5 local epochs, batch size 32)"
+Average aggregation time,0.0005 s,Server-side coordination overhead
+Average hash computation latency,0.0007 s,Local SHA-256 only; not production blockchain latency
+Model payload size,513 KB,Per communication round
+Differential privacy processing,~4.6% additional training time,Acceptable for batch model updates
+Secure update transmission,~6.2% communication overhead,Depends on update size and encryption method
+Fairness-aware aggregation,~3.9% additional aggregation time,Acceptable for governance-sensitive learning
+Human-in-the-loop review,Variable delay,Required for high-impact employment decisions

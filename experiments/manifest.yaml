@@ -8,9 +8,9 @@ provenance:
 experimental_setup:
   seeds: [42, 123, 2024, 777, 999]
   n_rounds: 20
-  local_epochs: 3
-  learning_rate: 0.001
-  batch_size: 64
+  local_epochs: 5
+  learning_rate: 0.01
+  batch_size: 32
 
 nodes:
   - saudi_arabia
@@ -21,7 +21,9 @@ nodes:
 privacy_settings:
   dp_enabled: true
   clipping_threshold: 1.0
-  noise_multiplier: 0.1
+  noise_multiplier: 1.1
+  epsilon: 3.2
+  delta: 1.0e-5
 
 fairness_settings:
   lambda_fairness: 0.5

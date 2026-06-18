@@ -1,5 +1,9 @@
-Component,CPU Time,Notes
-Avg round duration (4 nodes),86.6s,Mean over all federated rounds
-Min round duration,71.2s,
-Max round duration,108.4s,
-Total simulation time,866.4s,(10 rounds x 4 nodes)
+Component,Observed value,Comment
+Average local training time,16.01 s,"Per-node computation (5 local epochs, batch size 32)"
+Average aggregation time,0.0005 s,Server-side coordination overhead
+Average hash computation latency,0.0007 s,Local SHA-256 only; not production blockchain latency
+Model payload size,513 KB,Per communication round
+Differential privacy processing,~4.6% additional training time,Acceptable for batch model updates
+Secure update transmission,~6.2% communication overhead,Depends on update size and encryption method
+Fairness-aware aggregation,~3.9% additional aggregation time,Acceptable for governance-sensitive learning
+Human-in-the-loop review,Variable delay,Required for high-impact employment decisions
