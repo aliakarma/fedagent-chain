@@ -1,10 +1,10 @@
-# Lambda fairness sweep: lambda=0.05
+# Lambda fairness sweep: lambda=5.00 (paper sweep upper endpoint)
 defaults:
   - /default
 
 experiment:
-  name: lambda_sweep_0.05
-  description: "Lambda fairness sweep: lambda=0.05"
+  name: lambda_sweep_5.00
+  description: "Lambda fairness sweep: lambda=5.00"
   variant: lambda_sweep
 
 seed: 42
@@ -12,18 +12,18 @@ seed: 42
 federated:
   n_rounds: 20
   min_clients: 4
-  local_epochs: 3
-  batch_size: 64
-  learning_rate: 0.0001
+  local_epochs: 5
+  batch_size: 32
+  learning_rate: 0.01
 
 privacy:
   enabled: true
   clipping_threshold: 1.0
-  noise_multiplier: 0.1
+  noise_multiplier: 1.1
 
 fairness:
   enabled: true
-  lambda_fairness: 0.05
+  lambda_fairness: 5.00
   protected_groups:
     - disability_category
     - language_primary

@@ -12,14 +12,14 @@ seed: 42
 federated:
   n_rounds: 20
   min_clients: 4
-  local_epochs: 3
-  batch_size: 64
-  learning_rate: 0.0001
+  local_epochs: 5
+  batch_size: 32
+  learning_rate: 0.01
 
 privacy:
   enabled: true
   clipping_threshold: 1.0
-  noise_multiplier: 0.1
+  noise_multiplier: 1.1
 
 fairness:
   enabled: false

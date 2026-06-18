@@ -1,11 +1,13 @@
-# Ablation: System without human-in-the-loop governance agent
-# Measures contribution of governance to safety and oversight.
+# Ablation: Full system without the multilingual communication agent
+# The multilingual agent operates at the service layer and does not alter
+# federated F1 or on-chain metrics; its contribution is measured separately
+# via language-support adequacy (paper Table: agent_results).
 # Self-contained config (load_config does not compose `defaults:`).
 
 experiment:
-  name: ablation_no_governance
-  description: "Ablation — full system without human-in-the-loop governance agent"
-  variant: ablation_no_governance
+  name: ablation_no_multilingual
+  description: "Ablation — full system with the multilingual agent disabled"
+  variant: ablation_no_multilingual
 
 seed: 42
 
@@ -35,8 +37,8 @@ blockchain:
   records_per_block: 10
 
 agents:
-  governance:
-    review_threshold: 1.01   # Ablated: threshold > 1.0 disables governance review
+  multilingual:
+    enabled: false          # Ablated service-layer component
 
 data:
   n_users_per_node: 2500

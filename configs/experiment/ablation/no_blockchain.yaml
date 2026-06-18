@@ -1,12 +1,39 @@
 # Ablation: System without blockchain audit layer
-# Measures contribution of blockchain to auditability and trust
-
-defaults:
-  - /experiment/fedagent_chain_full
+# Measures contribution of blockchain to auditability and trust.
+# Self-contained config (load_config does not compose `defaults:`).
 
 experiment:
   name: ablation_no_blockchain
   description: "Ablation study — full FL with fairness but no blockchain logging"
+  variant: ablation_no_blockchain
+
+seed: 42
+
+federated:
+  n_rounds: 20
+  min_clients: 4
+  local_epochs: 5
+  batch_size: 32
+  learning_rate: 0.01
+
+privacy:
+  enabled: true
+  clipping_threshold: 1.0
+  noise_multiplier: 1.1
+
+fairness:
+  enabled: true
+  lambda_fairness: 0.50
+  protected_groups:
+    - disability_category
+    - language_primary
+    - preferred_work_mode
+    - node_id
 
 blockchain:
-  enabled: false
+  enabled: false          # Ablated component
+
+data:
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500

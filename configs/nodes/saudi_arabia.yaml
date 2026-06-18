@@ -18,13 +18,13 @@ data:
 # Local training parameters (override defaults if needed)
 federated:
   local_epochs: 5
-  batch_size: 64
-  learning_rate: 0.001
+  batch_size: 32
+  learning_rate: 0.01
 
 # Privacy
 privacy:
   clipping_threshold: 1.0
-  noise_multiplier: 0.1
+  noise_multiplier: 1.1
 
 # Governance policy reference
 policy_ref: policy_saudi_arabia_pdpl    # Personal Data Protection Law (PDPL)

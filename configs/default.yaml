@@ -5,30 +5,30 @@
 # Reproducibility
 seed: 42
 
-# Federated Learning
+# Federated Learning — values per paper Table (hyperparameter configuration)
 federated:
-  n_rounds: 20
+  n_rounds: 20               # T — total federated rounds
   min_clients: 4
-  local_epochs: 5
-  batch_size: 64
-  learning_rate: 0.001
+  local_epochs: 5            # E — local training epochs per round
+  batch_size: 32
+  learning_rate: 0.01        # η
 
-# Model Architecture
+# Model Architecture — paper: two hidden layers (256, 128) → sigmoid
 model:
   input_dim: 91          # 50 (skills) + 20 (accom) + 8 (disability) + 3 (mode) + 5 (edu) + 4 (goal) + 1 (lang)
-  hidden_dims: [256, 128, 64]
+  hidden_dims: [256, 128]
   dropout_rate: 0.3
 
 # Differential Privacy
 privacy:
   enabled: true
   clipping_threshold: 1.0    # C — L2 norm clipping threshold
-  noise_multiplier: 0.1      # σ — Gaussian noise multiplier
+  noise_multiplier: 1.1      # σ — Gaussian noise multiplier
 
 # Fairness Optimization
 fairness:
   enabled: true
-  lambda_fairness: 0.1       # λ — fairness regularization weight
+  lambda_fairness: 0.50      # λ — fairness regularization weight (Pareto-selected)
   protected_groups:
     - disability_category
     - language_primary
@@ -50,7 +50,7 @@ agents:
     delta: 0.15              # Work preference alignment weight
     top_k: 10
   governance:
-    review_threshold: 0.70   # τ — risk score threshold for human review escalation
+    review_threshold: 0.65   # τ — risk score threshold for human review escalation
 
 # Data
 data:

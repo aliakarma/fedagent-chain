@@ -15,6 +15,8 @@ federated:
   n_rounds: 1               # Only one round (no aggregation)
   local_epochs: 100         # More epochs to compensate for no federation
   min_clients: 1
+  batch_size: 32
+  learning_rate: 0.01
 
 privacy:
   enabled: false            # No privacy mechanism in local baseline

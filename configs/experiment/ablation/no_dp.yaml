@@ -1,11 +1,11 @@
-# Ablation: System without human-in-the-loop governance agent
-# Measures contribution of governance to safety and oversight.
+# Ablation: Full system without differential privacy
+# Measures the price of the formal (epsilon, delta)-DP guarantee on F1.
 # Self-contained config (load_config does not compose `defaults:`).
 
 experiment:
-  name: ablation_no_governance
-  description: "Ablation — full system without human-in-the-loop governance agent"
-  variant: ablation_no_governance
+  name: ablation_no_dp
+  description: "Ablation — full FedAgent-Chain with differential privacy disabled"
+  variant: ablation_no_dp
 
 seed: 42
 
@@ -17,7 +17,7 @@ federated:
   learning_rate: 0.01
 
 privacy:
-  enabled: true
+  enabled: false          # Ablated component (no clipping / no Gaussian noise)
   clipping_threshold: 1.0
   noise_multiplier: 1.1
 
@@ -33,10 +33,6 @@ fairness:
 blockchain:
   enabled: true
   records_per_block: 10
-
-agents:
-  governance:
-    review_threshold: 1.01   # Ablated: threshold > 1.0 disables governance review
 
 data:
   n_users_per_node: 2500

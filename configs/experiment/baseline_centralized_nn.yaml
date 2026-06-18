@@ -1,0 +1,41 @@
+# Matched Centralized Neural-Network Baseline — all data pooled at one node.
+# Paper Table (model performance): "Centralized (NN)" row (near-upper-bound).
+# Same 256-128-1 architecture, optimizer, dropout, and epoch budget (E*T = 5*20
+# = 100 epochs) as the federated clients, trained on pooled data. Isolates the
+# price of keeping data local from any model-capacity confound.
+# Self-contained config (load_config does not compose `defaults:`).
+
+experiment:
+  name: baseline_centralized_nn
+  description: "Matched centralized NN baseline — pooled data, federated-equivalent budget"
+  variant: baseline_centralized_nn
+  note: "Theoretical near-upper-bound; NOT privacy compliant (pools raw data)."
+
+seed: 42
+
+federated:
+  n_rounds: 1
+  local_epochs: 100         # Matches federated budget E=5 x T=20
+  min_clients: 1
+  batch_size: 32
+  learning_rate: 0.01
+
+model:
+  input_dim: 91
+  hidden_dims: [256, 128]
+  dropout_rate: 0.3
+
+privacy:
+  enabled: false
+
+fairness:
+  enabled: false
+
+blockchain:
+  enabled: false
+
+data:
+  n_users_per_node: 2500
+  n_jobs_per_node: 1250
+  n_pairs_per_node: 12500
+  centralized: true         # Pool all nodes into a single training set

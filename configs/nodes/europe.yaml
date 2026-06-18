@@ -6,8 +6,8 @@ data:
   n_pairs: 12500
 federated:
   local_epochs: 5
-  batch_size: 64
-  learning_rate: 0.001
+  batch_size: 32
+  learning_rate: 0.01
 privacy:
   clipping_threshold: 1.0
-  noise_multiplier: 0.1
+  noise_multiplier: 1.1
