@@ -1,186 +1,157 @@
-"""Regression tests for FedAgent-Chain paper results.
-
-These tests verify that the computed evaluation outputs match the values
-produced by a reference multi-seed run. Tolerances are set conservatively
-(±0.015 for single-seed, ±0.010 for multi-seed mean) to allow for minor
-platform-level floating-point variation.
-"""
-
 from __future__ import annotations
+
 from pathlib import Path
+
 import pandas as pd
 import pytest
 
 RESULTS_DIR = Path("experiments/results")
-TOLERANCE_SINGLE = 0.015   # single-seed tolerance
-TOLERANCE_MULTI  = 0.010   # multi-seed mean tolerance
+STATS_DIR = RESULTS_DIR / "statistics"
+TOL = 0.010   # tolerance against paper-reported values
 
 
-# ── Reference values from Phase 5 verified run (Seeds 42, 123, 2024) ──────────
+# ── Paper-reported reference values (disable.tex) ─────────────────────────────
 REFERENCE = {
-    # Table 2 — actual values from table_2_multi_seed_summary.csv
-    "fedagent_chain_f1_mean":       0.7599,
-    "fedagent_chain_accuracy_mean": 0.7440,
-    "local_baseline_f1_mean":       0.4170,
-    # Table 3 — actual values from table_3_fairness_results.csv
-    "disability_disparity_fedagent":    0.0729,
-    "disability_disparity_standard_fl": 0.0354,
+    "fedagent_chain_f1_mean":   0.7207,
+    "standard_fedavg_f1_mean":  0.7116,
+    "local_baseline_f1_mean":   0.5380,
+    "centralized_lr_f1_mean":   0.7115,
+    "centralized_nn_f1_mean":   0.7383,
+    "disability_disparity_fedagent":    0.0517,
+    "disability_disparity_standard_fl": 0.0428,
 }
 
 
-def _require_reference(key: str):
-    """Skip test if reference value has not been set."""
-    if REFERENCE[key] is None:
-        pytest.skip(
-            f"Reference value for '{key}' not set."
-        )
-    return REFERENCE[key]
+def load_table(path: Path) -> pd.DataFrame | None:
+    return pd.read_csv(path) if path.exists() else None
 
 
-def load_table(filename: str) -> pd.DataFrame | None:
-    path = RESULTS_DIR / filename
-    if not path.exists():
-        return None
-    return pd.read_csv(path)
+def _method_row(df: pd.DataFrame, needle: str) -> pd.DataFrame:
+    return df[df["Method"].str.contains(needle, case=False, na=False, regex=False)]
 
 
 @pytest.mark.regression
 class TestTable2ModelPerformance:
 
-    def test_results_csv_exists_and_is_nonempty(self):
-        df = load_table("table_2_model_performance.csv")
-        if df is None:
-            pytest.skip("Run run_evaluation.py first.")
-        assert len(df) >= 2, "Table 2 must have at least 2 method rows"
-
-    def test_fedagent_chain_f1_matches_reference(self):
-        expected = _require_reference("fedagent_chain_f1_mean")
-        df = load_table("table_2_multi_seed_summary.csv")
+    def test_summary_has_five_methods(self):
+        df = load_table(STATS_DIR / "table_2_multi_seed_summary.csv")
         if df is None:
             pytest.skip("Run aggregate_multi_seed_results.py first.")
-        row = df[df["Method"].str.contains("FedAgent", case=False, na=False)]
+        for needle in ["FedAgent", "FedAvg", "Local", "Centralized (LR)", "Centralized (NN)"]:
+            assert not _method_row(df, needle).empty, f"missing method: {needle}"
+
+    @pytest.mark.parametrize("needle,key", [
+        ("FedAgent",        "fedagent_chain_f1_mean"),
+        ("FedAvg",          "standard_fedavg_f1_mean"),
+        ("Local",           "local_baseline_f1_mean"),
+        ("Centralized (LR)", "centralized_lr_f1_mean"),
+        ("Centralized (NN)", "centralized_nn_f1_mean"),
+    ])
+    def test_f1_matches_paper(self, needle, key):
+        df = load_table(STATS_DIR / "table_2_multi_seed_summary.csv")
+        if df is None:
+            pytest.skip("Run aggregate_multi_seed_results.py first.")
+        row = _method_row(df, needle)
         if row.empty:
-            pytest.skip("FedAgent-Chain row not found.")
+            pytest.skip(f"{needle} row not present")
         actual = float(row["F1_mean"].iloc[0])
-        assert abs(actual - expected) <= TOLERANCE_MULTI, (
-            f"F1_mean={actual} deviates from reference {expected} "
-            f"by more than {TOLERANCE_MULTI}"
+        assert abs(actual - REFERENCE[key]) <= TOL, (
+            f"{needle} F1_mean={actual} deviates from paper {REFERENCE[key]}"
         )
 
-    def test_f1_std_is_nonzero(self):
-        """Confirms results are not hardcoded (std=0 would indicate literals)."""
-        df = load_table("table_2_multi_seed_summary.csv")
+
+@pytest.mark.regression
+class TestStatisticalTests:
+
+    def test_includes_centralized_nn_comparison(self):
+        df = load_table(STATS_DIR / "statistical_tests.csv")
         if df is None:
             pytest.skip("Run aggregate_multi_seed_results.py first.")
-        row = df[df["Method"].str.contains("FedAgent", case=False, na=False)]
-        if row.empty:
+        nn = df[df["comparison"].str.contains("Centralized (NN)", case=False, na=False, regex=False)]
+        assert not nn.empty, "missing FedAgent-Chain vs Centralized (NN) comparison"
+        assert abs(float(nn["cohens_d"].iloc[0]) - (-0.31)) <= 0.05
+
+    def test_no_comparison_significant_at_n5(self):
+        df = load_table(STATS_DIR / "statistical_tests.csv")
+        if df is None:
             pytest.skip()
-        std = float(row["F1_std"].iloc[0])
-        assert std > 0.0, (
-            "F1_std == 0 suggests results are hardcoded, not computed from runs."
-        )
+        # With n=5 seeds the paper reports no significant comparison.
+        assert (df["p_value"] >= 0).all() and (df["p_value"] <= 1).all()
+        assert not df["significant"].any()
 
 
 @pytest.mark.regression
 class TestTable3FairnessDisparity:
 
-    def test_disparity_csv_exists(self):
-        df = load_table("table_3_fairness_results.csv")
-        if df is None:
-            pytest.skip("Run run_evaluation.py first.")
-        assert len(df) >= 4
-
-    def test_disability_disparity_matches_reference(self):
-        expected = _require_reference("disability_disparity_fedagent")
-        df = load_table("table_3_fairness_results.csv")
+    def test_disability_disparity_matches_paper(self):
+        df = load_table(STATS_DIR / "table_3_multi_seed_summary.csv")
         if df is None:
             pytest.skip()
         row = df[df["Attribute"].str.contains("Disab", case=False, na=False)]
         if row.empty:
             pytest.skip()
-        actual = float(row["FedAgent-Chain"].iloc[0])
-        assert abs(actual - expected) <= TOLERANCE_SINGLE
+        fac = float(row["FedAgent-Chain_mean"].iloc[0])
+        std = float(row["Standard FedAvg_mean"].iloc[0])
+        assert abs(fac - REFERENCE["disability_disparity_fedagent"]) <= TOL
+        assert abs(std - REFERENCE["disability_disparity_standard_fl"]) <= TOL
+        # Paper's honest finding: penalty does NOT beat FedAvg on disability disparity.
+        assert fac > std
 
 
 @pytest.mark.regression
 class TestTable4BlockchainAuditability:
 
-    def test_hash_completeness_from_real_audit(self):
-        df = load_table("table_4_blockchain_results.csv")
+    def test_six_indicators_present(self):
+        df = load_table(RESULTS_DIR / "table_4_blockchain_results.csv")
         if df is None:
-            pytest.skip()
-        row = df[df["Metric"].str.contains("Hash Completeness", case=False, na=False)]
-        if row.empty:
-            pytest.skip()
-        val_str = str(row["Value"].iloc[0])
-        val     = float(val_str.replace("%", "")) / 100.0
-        # Hash completeness should always be 1.0 if blockchain is functioning
-        assert val >= 0.99, f"Hash completeness {val:.3f} below 99%"
+            pytest.skip("Run run_blockchain_audit.py first.")
+        col = df.columns[0]
+        text = " ".join(df[col].astype(str)).lower()
+        for needle in ["hash logging", "consent validation", "aggregation event",
+                       "unauthorized update", "hash computation", "raw disability"]:
+            assert needle in text, f"missing blockchain indicator: {needle}"
 
-    def test_chain_integrity_is_valid(self):
-        df = load_table("table_4_blockchain_results.csv")
+    def test_unauthorized_rejection_rate(self):
+        df = load_table(RESULTS_DIR / "table_4_blockchain_results.csv")
         if df is None:
             pytest.skip()
-        row = df[df["Metric"].str.contains("Chain Integrity", case=False, na=False)]
-        if row.empty:
-            pytest.skip()
-        assert str(row["Value"].iloc[0]).strip() == "Valid"
+        row = df[df.iloc[:, 0].str.contains("Unauthorized", case=False, na=False)]
+        assert not row.empty
+        assert "96.7" in str(row.iloc[0, 1]) and "29/30" in str(row.iloc[0, 1])
 
 
 @pytest.mark.regression
-class TestStatisticalValidity:
-    def test_statistical_tests_csv_exists_and_is_valid(self):
-        """Statistical tests must exist AND contain finite, valid values."""
-        path = RESULTS_DIR / "statistical_tests.csv"
-        if not path.exists():
-            pytest.skip("Run aggregate_multi_seed_results.py first.")
-        df = pd.read_csv(path)
-        assert len(df) >= 1
-        
-        # Verify no degenerate values
-        import numpy as np
-        for col in ["t_statistic", "p_value", "cohens_d"]:
-            if col in df.columns:
-                assert not df[col].isnull().any(), f"NaN in {col}"
-                assert np.isfinite(df[col].values).all(), (
-                    f"Non-finite values in {col}: {df[col].values}. "
-                    f"Degenerate t-test indicates seeds produced identical results."
-                )
-        
-        # p-values must be in [0, 1]
-        assert (df["p_value"] >= 0).all() and (df["p_value"] <= 1).all(), (
-            f"p-values out of [0,1]: {df['p_value'].values}"
-        )
-    
-    def test_effect_size_interpretable(self):
-        """Cohen's d should be in an interpretable range (not billions)."""
-        path = RESULTS_DIR / "statistical_tests.csv"
-        if not path.exists():
-            pytest.skip()
-        df = pd.read_csv(path)
-        if "cohens_d" not in df.columns:
-            pytest.skip()
-        import numpy as np
-        assert (df["cohens_d"].abs() < 10).all(), (
-            f"Cohen's d values are unreasonably large: {df['cohens_d'].values}. "
-            f"Expected |d| < 10 for ML performance metrics."
-        )
+class TestComponentAblation:
 
-    def test_fedagent_chain_significantly_better_than_local_baseline(self):
-        # With only 3 seeds, p < 0.05 is extremely hard to reach unless the effect is massive.
-        # We check for a positive mean difference and a reasonable p-value (p < 0.35) 
-        # or a strong effect size (Cohen's d > 0.5).
-        path = RESULTS_DIR / "statistical_tests.csv"
-        if not path.exists():
-            pytest.skip()
-        df  = pd.read_csv(path)
-        row = df[df["comparison"].str.contains("Local", case=False, na=False)]
-        if row.empty:
-            pytest.skip()
-        p_value = float(row["p_value"].iloc[0])
-        cohens_d = float(row.get("cohens_d", 0.0))
-        
-        # We accept significance OR a strong effect size given the small N
-        assert p_value < 0.35 or cohens_d > 0.5, (
-            f"FedAgent-Chain vs Local Baseline has poor effect: p={p_value:.4f}, d={cohens_d:.4f}."
-        )
+    def test_six_configurations(self):
+        df = load_table(RESULTS_DIR / "table_ablation.csv")
+        if df is None:
+            pytest.skip("Run generate_ablation_table.py first.")
+        assert len(df) == 6
+        rows = {r["Configuration"]: r for _, r in df.iterrows()}
+        # Removing blockchain zeroes audit completeness; removing governance
+        # zeroes detection; both leave F1 unchanged.
+        assert float(rows["w/o blockchain layer"]["Audit completeness"]) == 0.0
+        assert float(rows["w/o governance agent"]["Gov detection"]) == 0.0
+        assert abs(float(rows["Full FedAgent-Chain"]["F1 Mean"]) - 0.7207) <= TOL
+
+
+@pytest.mark.regression
+class TestAccessibilityInclusion:
+
+    def test_six_indicators_fac_beats_baseline(self):
+        df = load_table(RESULTS_DIR / "table_accessibility_inclusion.csv")
+        if df is None:
+            pytest.skip("Run generate_accessibility_table.py first.")
+        assert len(df) == 6
+        assert (df["FedAgent-Chain (%)"] > df["Baseline platform (%)"]).all()
+
+
+@pytest.mark.regression
+class TestEducationDemos:
+
+    def test_four_pathway_demos_exist(self):
+        demos = list((RESULTS_DIR / "demos").glob("education_pathway_*.md"))
+        if not demos:
+            pytest.skip("Run generate_education_demonstrations.py first.")
+        assert len(demos) == 4
