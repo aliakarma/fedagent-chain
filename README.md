@@ -478,13 +478,19 @@ Researchers and authors can use the following artifacts to build the main manusc
 ## Citation
 
 ```bibtex
-@article{syed2026fedagentchain,
-  title   = {FedAgent-Chain: A Secure Federated and Agentic AI Framework
-             for Multilingual Disability-Inclusive Employment in AI Cities},
-  author  = {Syed, Toqeer Ali and Siddiqui, Muhammad Shoaib, Ali Akarma and Antonio Formisano},
-  journal = {MDPI Smart Cities},
-  year    = {2026},
+@article{syed2026fedagent,
+AUTHOR = {Syed, Toqeer Ali and Siddiqui, Muhammad Shoaib and Akarma, Ali and Formisano, Antonio},
+TITLE = {FedAgent-Chain: A Secure Federated and Agentic AI Framework for Multilingual Disability-Inclusive Employment in AI Cities},
+JOURNAL = {Smart Cities},
+VOLUME = {9},
+YEAR = {2026},
+NUMBER = {7},
+ARTICLE-NUMBER = {106},
+URL = {https://www.mdpi.com/2624-6511/9/7/106},
+ISSN = {2624-6511},
+DOI = {10.3390/smartcities9070106}
 }
+
 ```
 
 ---
